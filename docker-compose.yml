@@ -5,15 +5,15 @@ services:
     image: postgres:15-alpine
     container_name: stashjson_db
     environment:
-      POSTGRES_USER: stashjson_user
-      POSTGRES_PASSWORD: stashjson_password
-      POSTGRES_DB: stashjson_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U stashjson_user -d stashjson_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,7 +22,7 @@ services:
     build: .
     container_name: stashjson_api
     environment:
-      DATABASE_URL: postgresql://stashjson_user:stashjson_password@postgres:5432/stashjson_db
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
       APP_ENV: development
     ports:
       - "8000:8000"

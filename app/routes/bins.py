@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 import json
 
@@ -30,7 +30,7 @@ async def create_bin(
     # Create bin
     new_bin = Bin(
         id=bin_id,
-        api_key=user.api_key,
+        user_id=user.id,
         json_data=json.dumps(bin_data.json_data),
         is_public=bin_data.is_public
     )
@@ -51,21 +51,43 @@ async def create_bin(
 @router.get("/{bin_id}", response_model=BinResponse)
 async def get_bin(
     bin_id: str,
-    user: User = Depends(verify_api_key),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    x_api_key: str = Header(None, alias="X-API-Key")
 ):
     """
     Retrieve a bin by ID.
-    - Must own the bin OR bin must be public
-    - Requires valid API key in X-API-Key header
+    - Public bins: No authentication required
+    - Private bins: Must own the bin (requires valid API key)
     """
     bin = db.query(Bin).filter(Bin.id == bin_id).first()
 
     if not bin:
         raise HTTPException(status_code=404, detail="Bin not found")
 
-    # Check access: must be owner OR bin must be public
-    if bin.api_key != user.api_key and not bin.is_public:
+    # If bin is public, allow access without authentication
+    if bin.is_public:
+        return BinResponse(
+            id=bin.id,
+            json_data=json.loads(bin.json_data),
+            is_public=bin.is_public,
+            created_at=bin.created_at,
+            updated_at=bin.updated_at
+        )
+
+    # For private bins, require authentication
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="API key required for private bins")
+
+    # Verify the API key
+    from app.utils import hash_api_key
+    api_key_hash = hash_api_key(x_api_key)
+    user = db.query(User).filter(User.api_key_hash == api_key_hash).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # Check if user owns the bin
+    if bin.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     return BinResponse(
@@ -94,7 +116,7 @@ async def update_bin(
         raise HTTPException(status_code=404, detail="Bin not found")
 
     # Must be owner to update
-    if bin.api_key != user.api_key:
+    if bin.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     # Update fields if provided
@@ -132,7 +154,7 @@ async def delete_bin(
         raise HTTPException(status_code=404, detail="Bin not found")
 
     # Must be owner to delete
-    if bin.api_key != user.api_key:
+    if bin.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     db.delete(bin)

@@ -9,7 +9,7 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 @router.post("/generate-key", response_model=APIKeyResponse, status_code=201)
 async def generate_new_api_key(
-    key_request: APIKeyCreate,
+    key_request: APIKeyCreate = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -23,11 +23,10 @@ async def generate_new_api_key(
     api_key = generate_api_key()
     api_key_hash = hash_api_key(api_key)
 
-    # Create user record
+    # Create user record (only store the hash, never the plain key)
     new_user = User(
-        api_key=api_key,  # Store plain text temporarily for the response
         api_key_hash=api_key_hash,
-        email=key_request.email
+        email=key_request.email if key_request else None
     )
 
     db.add(new_user)

@@ -16,10 +16,10 @@ A lightweight JSON storage system for developers. Store, retrieve, update, and d
 cd stashJSON
 
 # Start both PostgreSQL and the API
-docker-compose up -d
+docker compose up -d
 
 # View logs (optional)
-docker-compose logs -f
+docker compose logs -f
 ```
 
 That's it! The application will:
@@ -59,9 +59,9 @@ Visit `http://localhost:8000/docs` for interactive API documentation!
    - **Connection tab**:
      - Host: `postgres` (this is the Docker service name)
      - Port: `5432`
-     - Database: `stashjson_db`
-     - Username: `stashjson_user`
-     - Password: `stashjson_password`
+     - Database: `postgres`
+     - Username: `postgres`
+     - Password: `postgres`
    - Click "Save"
 
 Now you can browse your database, run queries, and manage data through pgAdmin!
@@ -70,10 +70,10 @@ Now you can browse your database, run queries, and manage data through pgAdmin!
 
 ```bash
 # Stop containers
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (deletes database data)
-docker-compose down -v
+docker compose down -v
 ```
 
 ---
@@ -147,7 +147,7 @@ cp .env.example .env
 Your `.env` should look like:
 
 ```
-DATABASE_URL=postgresql://stashjson_user:your_password_here@localhost:5432/stashjson_db
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
 APP_ENV=development
 ```
 
@@ -246,7 +246,7 @@ stashJSON/
 ├── .dockerignore            # Docker ignore file
 ├── .env.example             # Example environment config
 ├── .gitignore
-├── docker-compose.yml       # Docker Compose configuration
+├── docker compose.yml       # Docker Compose configuration
 ├── Dockerfile               # Docker image definition
 ├── requirements.txt         # Python dependencies
 └── README.md
@@ -256,28 +256,28 @@ stashJSON/
 
 ```bash
 # Start services
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f api          # API logs only
-docker-compose logs -f postgres     # Database logs only
-docker-compose logs -f pgadmin      # pgAdmin logs only
-docker-compose logs -f              # All logs
+docker compose logs -f api          # API logs only
+docker compose logs -f postgres     # Database logs only
+docker compose logs -f pgadmin      # pgAdmin logs only
+docker compose logs -f              # All logs
 
 # Restart services
-docker-compose restart
+docker compose restart
 
 # Stop services
-docker-compose down
+docker compose down
 
 # Rebuild after code changes (if needed)
-docker-compose up -d --build
+docker compose up -d --build
 
 # Access PostgreSQL directly (via CLI)
-docker exec -it stashjson_db psql -U stashjson_user -d stashjson_db
+docker exec -it stashjson_db psql -U postgres -d postgres
 
 # View running containers
-docker-compose ps
+docker compose ps
 ```
 
 ## Accessing Services
