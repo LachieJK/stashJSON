@@ -10,16 +10,16 @@ class APIKeyResponse(BaseModel):
     api_key: str
     message: str
 
-# Bin Models
-class BinCreate(BaseModel):
+# Document Models
+class DocumentCreate(BaseModel):
     json_data: dict
     is_public: bool = False
 
-class BinUpdate(BaseModel):
+class DocumentUpdate(BaseModel):
     json_data: Optional[dict] = None
     is_public: Optional[bool] = None
 
-class BinResponse(BaseModel):
+class DocumentResponse(BaseModel):
     id: str
     json_data: dict
     is_public: bool
@@ -30,9 +30,9 @@ class BinResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class BinVersionResponse(BaseModel):
+class DocumentVersionResponse(BaseModel):
     id: str
-    bin_id: str  # Reference to parent bin
+    document_id: str  # Reference to parent document
     json_data: dict
     version: int
     created_at: datetime
@@ -40,14 +40,14 @@ class BinVersionResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class BinWithVersionsResponse(BaseModel):
+class DocumentWithVersionsResponse(BaseModel):
     id: str
     json_data: dict
     is_public: bool
     version: int  # Current version
     created_at: datetime
     updated_at: datetime
-    versions: list[BinVersionResponse] = []  # All historical versions
+    versions: list[DocumentVersionResponse] = []  # All historical versions
 
     class Config:
         from_attributes = True

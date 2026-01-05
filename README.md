@@ -1,4 +1,4 @@
-# StashJSON - Simple JSON Bin Storage
+# StashJSON - Simple JSON Document Storage
 
 A lightweight JSON storage system for developers. Store, retrieve, update, and delete JSON data via a simple REST API.
 
@@ -128,7 +128,7 @@ GRANT ALL PRIVILEGES ON DATABASE stashjson_db TO stashjson_user;
 python3 -m venv venv
 
 # Activate it
-source venv/bin/activate  # On macOS/Linux
+source venv/document/activate  # On macOS/Linux
 
 # Install dependencies
 pip install -r requirements.txt
@@ -189,10 +189,10 @@ curl -X POST "http://localhost:8000/auth/generate-key" \
 
 ⚠️ **IMPORTANT**: Save this API key! You'll need it for all subsequent requests.
 
-### 2. Create a Bin
+### 2. Create a Document
 
 ```bash
-curl -X POST "http://localhost:8000/bins/" \
+curl -X POST "http://localhost:8000/documents/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-api-key-here" \
   -d '{
@@ -201,17 +201,17 @@ curl -X POST "http://localhost:8000/bins/" \
   }'
 ```
 
-### 3. Get a Bin
+### 3. Get a Document
 
 ```bash
-curl -X GET "http://localhost:8000/bins/{bin_id}" \
+curl -X GET "http://localhost:8000/documents/{document_id}" \
   -H "X-API-Key: your-api-key-here"
 ```
 
-### 4. Update a Bin
+### 4. Update a Document
 
 ```bash
-curl -X PUT "http://localhost:8000/bins/{bin_id}" \
+curl -X PUT "http://localhost:8000/documents/{document_id}" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-api-key-here" \
   -d '{
@@ -220,10 +220,10 @@ curl -X PUT "http://localhost:8000/bins/{bin_id}" \
   }'
 ```
 
-### 5. Delete a Bin
+### 5. Delete a Document
 
 ```bash
-curl -X DELETE "http://localhost:8000/bins/{bin_id}" \
+curl -X DELETE "http://localhost:8000/documents/{document_id}" \
   -H "X-API-Key: your-api-key-here"
 ```
 
@@ -242,7 +242,7 @@ stashJSON/
 │   └── routes/
 │       ├── __init__.py
 │       ├── auth.py          # API key generation endpoints
-│       └── bins.py          # CRUD endpoints for bins
+│       └── documents.py          # CRUD endpoints for documents
 ├── .dockerignore            # Docker ignore file
 ├── .env.example             # Example environment config
 ├── .gitignore
@@ -291,13 +291,13 @@ docker compose ps
 
 ✅ **Phase 1 Complete** - Core API working locally:
 
-- ✅ POST /bins - Create bin
-- ✅ GET /bins/{id} - Read bin
-- ✅ PUT /bins/{id} - Update bin
-- ✅ DELETE /bins/{id} - Delete bin
+- ✅ POST /documents - Create document
+- ✅ GET /documents/{id} - Read document
+- ✅ PUT /documents/{id} - Update document
+- ✅ DELETE /documents/{id} - Delete document
 - ✅ Local PostgreSQL database
 - ✅ Simple API key authentication (hashed in DB)
-- ✅ Public/private bin support
+- ✅ Public/private document support
 - ✅ Timestamps for creation and updates
 
 ## Roadmap

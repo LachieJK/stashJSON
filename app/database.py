@@ -20,10 +20,10 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     email = Column(String(255), nullable=True)  # Optional for recovery
 
-    bins = relationship("Bin", back_populates="user", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
 
-class Bin(Base):
-    __tablename__ = "bins"
+class Document(Base):
+    __tablename__ = "documents"
 
     id = Column(String(16), primary_key=True, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
@@ -33,19 +33,19 @@ class Bin(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    user = relationship("User", back_populates="bins")
-    versions = relationship("BinVersion", back_populates="bin", cascade="all, delete-orphan", order_by="BinVersion.version")
+    user = relationship("User", back_populates="documents")
+    versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan", order_by="DocumentVersion.version")
 
-class BinVersion(Base):
-    __tablename__ = "bin_versions"
+class DocumentVersion(Base):
+    __tablename__ = "document_versions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
-    bin_id = Column(String(16), ForeignKey("bins.id"), nullable=False, index=True)
+    document_id = Column(String(16), ForeignKey("documents.id"), nullable=False, index=True)
     json_data = Column(Text, nullable=False)  # Historical JSON data
     version = Column(Integer, nullable=False)  # Version number
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    bin = relationship("Bin", back_populates="versions")
+    document = relationship("Document", back_populates="versions")
 
 # Database dependency for FastAPI
 def get_db():

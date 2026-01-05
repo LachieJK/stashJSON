@@ -2,12 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.routes import auth, bins
+from app.routes import auth, documents
 
 # Initialize FastAPI app
 app = FastAPI(
     title="StashJSON API",
-    description="Simple JSON bin storage system for developers",
+    description="Simple JSON document storage system for developers",
     version="1.0.0"
 )
 
@@ -22,7 +22,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
-app.include_router(bins.router)
+app.include_router(documents.router)
 
 @app.on_event("startup")
 async def startup_event():
