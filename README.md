@@ -227,6 +227,76 @@ curl -X DELETE "http://localhost:8000/documents/{document_id}" \
   -H "X-API-Key: your-api-key-here"
 ```
 
+## Workspaces
+
+Workspaces allow you to organize documents into collections.
+
+### 1. Create a Workspace
+
+```bash
+curl -X POST "http://localhost:8000/workspace" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
+  -d '{
+    "name": "My Project Workspace"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "id": "workspace-uuid-here",
+  "name": "My Project Workspace",
+  "created_at": "2024-01-05T10:30:00",
+  "updated_at": "2024-01-05T10:30:00",
+  "document_count": 0
+}
+```
+
+### 2. List All Workspaces
+
+```bash
+curl -X GET "http://localhost:8000/workspace" \
+  -H "X-API-Key: your-api-key-here"
+```
+
+### 3. Get Documents in a Workspace
+
+```bash
+curl -X GET "http://localhost:8000/workspace/{workspace_id}/documents" \
+  -H "X-API-Key: your-api-key-here"
+```
+
+### 4. Update Workspace Name
+
+```bash
+curl -X PUT "http://localhost:8000/workspace/{workspace_id}" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
+  -d '{
+    "name": "Updated Workspace Name"
+  }'
+```
+
+### 5. Remove Document from Workspace
+
+```bash
+curl -X DELETE "http://localhost:8000/workspace/{workspace_id}/documents/{document_id}" \
+  -H "X-API-Key: your-api-key-here"
+```
+
+**Note:** This removes the document from the workspace but doesn't delete it. The document remains accessible via its ID.
+
+### 6. Delete Workspace
+
+```bash
+curl -X DELETE "http://localhost:8000/workspace/{workspace_id}" \
+  -H "X-API-Key: your-api-key-here"
+```
+
+**Note:** Documents in the workspace are not deleted, only unassociated from the workspace.
+
 ## Project Structure
 
 ```
@@ -242,7 +312,8 @@ stashJSON/
 │   └── routes/
 │       ├── __init__.py
 │       ├── auth.py          # API key generation endpoints
-│       └── documents.py          # CRUD endpoints for documents
+│       ├── documents.py     # CRUD endpoints for documents
+│       └── workspaces.py    # Workspace management endpoints
 ├── .dockerignore            # Docker ignore file
 ├── .env.example             # Example environment config
 ├── .gitignore
@@ -294,10 +365,18 @@ docker compose ps
 - ✅ POST /documents - Create document
 - ✅ GET /documents/{id} - Read document
 - ✅ PUT /documents/{id} - Update document
+- ✅ PATCH /documents/{id} - Partial update
 - ✅ DELETE /documents/{id} - Delete document
+- ✅ POST /workspace - Create workspace
+- ✅ GET /workspace - List workspaces
+- ✅ GET /workspace/{id}/documents - List documents in workspace
+- ✅ PUT /workspace/{id} - Update workspace name
+- ✅ DELETE /workspace/{id}/documents/{document_id} - Remove document from workspace
 - ✅ Local PostgreSQL database
 - ✅ Simple API key authentication (hashed in DB)
 - ✅ Public/private document support
+- ✅ Version history for documents
+- ✅ Workspace organization
 - ✅ Timestamps for creation and updates
 
 ## Roadmap

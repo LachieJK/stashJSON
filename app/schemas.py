@@ -51,3 +51,20 @@ class DocumentWithVersionsResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Workspace Models
+class WorkspaceCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+
+class WorkspaceUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+
+class WorkspaceResponse(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    document_count: Optional[int] = None  # Optional count of documents
+
+    class Config:
+        from_attributes = True

@@ -7,10 +7,10 @@ from app.schemas import DocumentCreate, DocumentUpdate, DocumentResponse, Docume
 from app.auth import verify_api_key
 from app.utils import generate_document_id
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(prefix="/document", tags=["documents"])
 
 # API: Create Document
-@router.post("/document", response_model=DocumentResponse, status_code=201)
+@router.post("", response_model=DocumentResponse, status_code=201)
 async def create_document(
     document_data: DocumentCreate,
     user: User = Depends(verify_api_key),
@@ -50,7 +50,7 @@ async def create_document(
     )
 
 # API: Get Document (latest version)
-@router.get("/document/{document_id}", response_model=DocumentResponse)
+@router.get("/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: str,
     db: Session = Depends(get_db),
@@ -103,7 +103,7 @@ async def get_document(
     )
 
 # API: Update Document (Full Replacement)
-@router.put("/document/{document_id}", response_model=DocumentResponse)
+@router.put("/{document_id}", response_model=DocumentResponse)
 async def update_document(
     document_id: str,
     document_update: DocumentUpdate,
@@ -152,7 +152,7 @@ async def update_document(
     )
 
 # API: Patch Document (Partial Update)
-@router.patch("/document/{document_id}", response_model=DocumentResponse)
+@router.patch("/{document_id}", response_model=DocumentResponse)
 async def patch_document(
     document_id: str,
     document_update: DocumentUpdate,
@@ -202,7 +202,7 @@ async def patch_document(
     )
 
 # API: Delete Document
-@router.delete("/document/{document_id}", status_code=204)
+@router.delete("/{document_id}", status_code=204)
 async def delete_document(
     document_id: str,
     user: User = Depends(verify_api_key),
@@ -227,7 +227,7 @@ async def delete_document(
     return None
 
 # API: Get All Versions
-@router.get("/document/{document_id}/versions", response_model=list[DocumentVersionResponse])
+@router.get("/{document_id}/versions", response_model=list[DocumentVersionResponse])
 async def get_document_versions(
     document_id: str,
     db: Session = Depends(get_db),
@@ -270,7 +270,7 @@ async def get_document_versions(
     ]
 
 # API: Get Specific Version
-@router.get("/document/{document_id}/v{version}", response_model=DocumentVersionResponse)
+@router.get("/{document_id}/v{version}", response_model=DocumentVersionResponse)
 async def get_document_version(
     document_id: str,
     version: int,

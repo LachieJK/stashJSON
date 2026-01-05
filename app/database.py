@@ -21,12 +21,26 @@ class User(Base):
     email = Column(String(255), nullable=True)  # Optional for recovery
 
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
+    workspaces = relationship("Workspace", back_populates="user", cascade="all, delete-orphan")
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="workspaces")
+    documents = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")
 
 class Document(Base):
     __tablename__ = "documents"
 
     id = Column(String(16), primary_key=True, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=True)  # Optional workspace
     json_data = Column(Text, nullable=False)  # Store JSON as text (current version)
     is_public = Column(Boolean, default=False)
     version = Column(Integer, default=1, nullable=False)  # Current version number
@@ -34,6 +48,7 @@ class Document(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="documents")
+    workspace = relationship("Workspace", back_populates="documents")
     versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan", order_by="DocumentVersion.version")
 
 class DocumentVersion(Base):
