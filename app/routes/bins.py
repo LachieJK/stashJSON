@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 import json
 
-from app.database import get_db, Bin, User
-from app.schemas import BinCreate, BinUpdate, BinResponse
+from app.database import get_db, Bin, BinVersion, User
+from app.schemas import BinCreate, BinUpdate, BinResponse, BinVersionResponse, BinWithVersionsResponse
 from app.auth import verify_api_key
 from app.utils import generate_bin_id
 
@@ -27,12 +27,13 @@ async def create_bin(
     while db.query(Bin).filter(Bin.id == bin_id).first():
         bin_id = generate_bin_id()
 
-    # Create bin
+    # Create bin with version 1
     new_bin = Bin(
         id=bin_id,
         user_id=user.id,
         json_data=json.dumps(bin_data.json_data),
-        is_public=bin_data.is_public
+        is_public=bin_data.is_public,
+        version=1
     )
 
     db.add(new_bin)
@@ -43,11 +44,12 @@ async def create_bin(
         id=new_bin.id,
         json_data=json.loads(new_bin.json_data),
         is_public=new_bin.is_public,
+        version=new_bin.version,
         created_at=new_bin.created_at,
         updated_at=new_bin.updated_at
     )
 
-# API: Get Bin
+# API: Get Bin (latest version)
 @router.get("/{bin_id}", response_model=BinResponse)
 async def get_bin(
     bin_id: str,
@@ -70,6 +72,7 @@ async def get_bin(
             id=bin.id,
             json_data=json.loads(bin.json_data),
             is_public=bin.is_public,
+            version=bin.version,
             created_at=bin.created_at,
             updated_at=bin.updated_at
         )
@@ -94,6 +97,7 @@ async def get_bin(
         id=bin.id,
         json_data=json.loads(bin.json_data),
         is_public=bin.is_public,
+        version=bin.version,
         created_at=bin.created_at,
         updated_at=bin.updated_at
     )
@@ -119,9 +123,18 @@ async def update_bin(
     if bin.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Update fields if provided (full replacement)
+    # Save current version to history before updating
     if bin_update.json_data is not None:
+        version_snapshot = BinVersion(
+            bin_id=bin.id,
+            json_data=bin.json_data,
+            version=bin.version
+        )
+        db.add(version_snapshot)
+
+        # Update bin with new data and increment version
         bin.json_data = json.dumps(bin_update.json_data)
+        bin.version += 1
 
     if bin_update.is_public is not None:
         bin.is_public = bin_update.is_public
@@ -133,6 +146,7 @@ async def update_bin(
         id=bin.id,
         json_data=json.loads(bin.json_data),
         is_public=bin.is_public,
+        version=bin.version,
         created_at=bin.created_at,
         updated_at=bin.updated_at
     )
@@ -158,11 +172,19 @@ async def patch_bin(
     if bin.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Merge JSON data if provided (partial update)
+    # Save current version to history and merge JSON data if provided (partial update)
     if bin_update.json_data is not None:
+        version_snapshot = BinVersion(
+            bin_id=bin.id,
+            json_data=bin.json_data,
+            version=bin.version
+        )
+        db.add(version_snapshot)
+
         existing_data = json.loads(bin.json_data)
         existing_data.update(bin_update.json_data)
         bin.json_data = json.dumps(existing_data)
+        bin.version += 1
 
     if bin_update.is_public is not None:
         bin.is_public = bin_update.is_public
@@ -174,6 +196,7 @@ async def patch_bin(
         id=bin.id,
         json_data=json.loads(bin.json_data),
         is_public=bin.is_public,
+        version=bin.version,
         created_at=bin.created_at,
         updated_at=bin.updated_at
     )
@@ -202,3 +225,93 @@ async def delete_bin(
     db.commit()
 
     return None
+
+# API: Get All Versions
+@router.get("/{bin_id}/versions", response_model=list[BinVersionResponse])
+async def get_bin_versions(
+    bin_id: str,
+    db: Session = Depends(get_db),
+    x_api_key: str = Header(None, alias="X-API-Key")
+):
+    """
+    Get all version history for a bin.
+    - Public bins: No authentication required
+    - Private bins: Must own the bin
+    """
+    bin = db.query(Bin).filter(Bin.id == bin_id).first()
+
+    if not bin:
+        raise HTTPException(status_code=404, detail="Bin not found")
+
+    # Check authentication for private bins
+    if not bin.is_public:
+        if not x_api_key:
+            raise HTTPException(status_code=401, detail="API key required for private bins")
+
+        from app.utils import hash_api_key
+        api_key_hash = hash_api_key(x_api_key)
+        user = db.query(User).filter(User.api_key_hash == api_key_hash).first()
+
+        if not user or bin.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    # Get all versions
+    versions = db.query(BinVersion).filter(BinVersion.bin_id == bin_id).order_by(BinVersion.version).all()
+
+    return [
+        BinVersionResponse(
+            id=v.id,
+            bin_id=v.bin_id,
+            json_data=json.loads(v.json_data),
+            version=v.version,
+            created_at=v.created_at
+        )
+        for v in versions
+    ]
+
+# API: Get Specific Version
+@router.get("/{bin_id}/v/{version}", response_model=BinVersionResponse)
+async def get_bin_version(
+    bin_id: str,
+    version: int,
+    db: Session = Depends(get_db),
+    x_api_key: str = Header(None, alias="X-API-Key")
+):
+    """
+    Get a specific version of a bin.
+    - Public bins: No authentication required
+    - Private bins: Must own the bin
+    """
+    bin = db.query(Bin).filter(Bin.id == bin_id).first()
+
+    if not bin:
+        raise HTTPException(status_code=404, detail="Bin not found")
+
+    # Check authentication for private bins
+    if not bin.is_public:
+        if not x_api_key:
+            raise HTTPException(status_code=401, detail="API key required for private bins")
+
+        from app.utils import hash_api_key
+        api_key_hash = hash_api_key(x_api_key)
+        user = db.query(User).filter(User.api_key_hash == api_key_hash).first()
+
+        if not user or bin.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    # Get specific version
+    bin_version = db.query(BinVersion).filter(
+        BinVersion.bin_id == bin_id,
+        BinVersion.version == version
+    ).first()
+
+    if not bin_version:
+        raise HTTPException(status_code=404, detail=f"Version {version} not found")
+
+    return BinVersionResponse(
+        id=bin_version.id,
+        bin_id=bin_version.bin_id,
+        json_data=json.loads(bin_version.json_data),
+        version=bin_version.version,
+        created_at=bin_version.created_at
+    )

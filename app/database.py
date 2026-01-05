@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import create_engine, Column, String, Boolean, DateTime, Text, ForeignKey, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -27,12 +27,25 @@ class Bin(Base):
 
     id = Column(String(16), primary_key=True, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    json_data = Column(Text, nullable=False)  # Store JSON as text
+    json_data = Column(Text, nullable=False)  # Store JSON as text (current version)
     is_public = Column(Boolean, default=False)
+    version = Column(Integer, default=1, nullable=False)  # Current version number
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="bins")
+    versions = relationship("BinVersion", back_populates="bin", cascade="all, delete-orphan", order_by="BinVersion.version")
+
+class BinVersion(Base):
+    __tablename__ = "bin_versions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    bin_id = Column(String(16), ForeignKey("bins.id"), nullable=False, index=True)
+    json_data = Column(Text, nullable=False)  # Historical JSON data
+    version = Column(Integer, nullable=False)  # Version number
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    bin = relationship("Bin", back_populates="versions")
 
 # Database dependency for FastAPI
 def get_db():
