@@ -10,7 +10,7 @@ from app.utils import generate_bin_id
 router = APIRouter(prefix="/bins", tags=["bins"])
 
 # API: Create Bin
-@router.post("/", response_model=BinResponse, status_code=201)
+@router.post("/bin", response_model=BinResponse, status_code=201)
 async def create_bin(
     bin_data: BinCreate,
     user: User = Depends(verify_api_key),
@@ -50,7 +50,7 @@ async def create_bin(
     )
 
 # API: Get Bin (latest version)
-@router.get("/{bin_id}", response_model=BinResponse)
+@router.get("/bin/{bin_id}", response_model=BinResponse)
 async def get_bin(
     bin_id: str,
     db: Session = Depends(get_db),
@@ -103,7 +103,7 @@ async def get_bin(
     )
 
 # API: Update Bin (Full Replacement)
-@router.put("/{bin_id}", response_model=BinResponse)
+@router.put("/bin/{bin_id}", response_model=BinResponse)
 async def update_bin(
     bin_id: str,
     bin_update: BinUpdate,
@@ -152,7 +152,7 @@ async def update_bin(
     )
 
 # API: Patch Bin (Partial Update)
-@router.patch("/{bin_id}", response_model=BinResponse)
+@router.patch("/bin/{bin_id}", response_model=BinResponse)
 async def patch_bin(
     bin_id: str,
     bin_update: BinUpdate,
@@ -202,7 +202,7 @@ async def patch_bin(
     )
 
 # API: Delete Bin
-@router.delete("/{bin_id}", status_code=204)
+@router.delete("/bin/{bin_id}", status_code=204)
 async def delete_bin(
     bin_id: str,
     user: User = Depends(verify_api_key),
@@ -227,7 +227,7 @@ async def delete_bin(
     return None
 
 # API: Get All Versions
-@router.get("/{bin_id}/versions", response_model=list[BinVersionResponse])
+@router.get("/bin/{bin_id}/versions", response_model=list[BinVersionResponse])
 async def get_bin_versions(
     bin_id: str,
     db: Session = Depends(get_db),
@@ -270,7 +270,7 @@ async def get_bin_versions(
     ]
 
 # API: Get Specific Version
-@router.get("/{bin_id}/v/{version}", response_model=BinVersionResponse)
+@router.get("/bin/{bin_id}/v{version}", response_model=BinVersionResponse)
 async def get_bin_version(
     bin_id: str,
     version: int,
