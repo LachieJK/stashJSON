@@ -98,7 +98,7 @@ async def get_bin(
         updated_at=bin.updated_at
     )
 
-# API: Update Bin
+# API: Update Bin (Full Replacement)
 @router.put("/{bin_id}", response_model=BinResponse)
 async def update_bin(
     bin_id: str,
@@ -107,7 +107,7 @@ async def update_bin(
     db: Session = Depends(get_db)
 ):
     """
-    Update a bin's JSON data and/or public status.
+    Fully replace a bin's JSON data and/or public status.
     Must own the bin.
     """
     bin = db.query(Bin).filter(Bin.id == bin_id).first()
@@ -119,9 +119,50 @@ async def update_bin(
     if bin.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Update fields if provided
+    # Update fields if provided (full replacement)
     if bin_update.json_data is not None:
         bin.json_data = json.dumps(bin_update.json_data)
+
+    if bin_update.is_public is not None:
+        bin.is_public = bin_update.is_public
+
+    db.commit()
+    db.refresh(bin)
+
+    return BinResponse(
+        id=bin.id,
+        json_data=json.loads(bin.json_data),
+        is_public=bin.is_public,
+        created_at=bin.created_at,
+        updated_at=bin.updated_at
+    )
+
+# API: Patch Bin (Partial Update)
+@router.patch("/{bin_id}", response_model=BinResponse)
+async def patch_bin(
+    bin_id: str,
+    bin_update: BinUpdate,
+    user: User = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """
+    Partially update a bin's JSON data (merges with existing data).
+    Must own the bin.
+    """
+    bin = db.query(Bin).filter(Bin.id == bin_id).first()
+
+    if not bin:
+        raise HTTPException(status_code=404, detail="Bin not found")
+
+    # Must be owner to update
+    if bin.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Merge JSON data if provided (partial update)
+    if bin_update.json_data is not None:
+        existing_data = json.loads(bin.json_data)
+        existing_data.update(bin_update.json_data)
+        bin.json_data = json.dumps(existing_data)
 
     if bin_update.is_public is not None:
         bin.is_public = bin_update.is_public
