@@ -14,6 +14,7 @@ class APIKeyResponse(BaseModel):
 class DocumentCreate(BaseModel):
     json_data: dict
     is_public: bool = False
+    workspace_id: Optional[str] = None  # Optional workspace assignment
 
 class DocumentUpdate(BaseModel):
     json_data: Optional[dict] = None
@@ -65,6 +66,24 @@ class WorkspaceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     document_count: Optional[int] = None  # Optional count of documents
+    has_template: Optional[bool] = None  # Whether workspace has a template
+
+    class Config:
+        from_attributes = True
+
+# Workspace Template Models
+class WorkspaceTemplateCreate(BaseModel):
+    json_schema: dict = Field(..., description="JSON Schema definition for documents in this workspace")
+
+class WorkspaceTemplateUpdate(BaseModel):
+    json_schema: dict = Field(..., description="JSON Schema definition for documents in this workspace")
+
+class WorkspaceTemplateResponse(BaseModel):
+    id: str
+    workspace_id: str
+    json_schema: dict
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

@@ -34,6 +34,18 @@ class Workspace(Base):
 
     user = relationship("User", back_populates="workspaces")
     documents = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")
+    template = relationship("WorkspaceTemplate", back_populates="workspace", uselist=False, cascade="all, delete-orphan")
+
+class WorkspaceTemplate(Base):
+    __tablename__ = "workspace_templates"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, unique=True)
+    json_schema = Column(Text, nullable=False)  # JSON Schema definition
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    workspace = relationship("Workspace", back_populates="template")
 
 class Document(Base):
     __tablename__ = "documents"

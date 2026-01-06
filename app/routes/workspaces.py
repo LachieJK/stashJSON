@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+import json
 
-from app.database import get_db, Workspace, Document, User
-from app.schemas import WorkspaceCreate, WorkspaceUpdate, WorkspaceResponse, DocumentResponse
+from app.database import get_db, Workspace, Document, User, WorkspaceTemplate
+from app.schemas import (
+    WorkspaceCreate, WorkspaceUpdate, WorkspaceResponse, DocumentResponse,
+    WorkspaceTemplateCreate, WorkspaceTemplateUpdate, WorkspaceTemplateResponse
+)
 from app.auth import verify_api_key
+from app.template_validator import validate_json_against_schema
 
 router = APIRouter(prefix="/workspace", tags=["workspaces"])
 
@@ -51,12 +56,14 @@ def list_workspaces(
     result = []
     for workspace in workspaces:
         document_count = db.query(Document).filter(Document.workspace_id == workspace.id).count()
+        has_template = db.query(WorkspaceTemplate).filter(WorkspaceTemplate.workspace_id == workspace.id).first() is not None
         result.append(WorkspaceResponse(
             id=workspace.id,
             name=workspace.name,
             created_at=workspace.created_at,
             updated_at=workspace.updated_at,
-            document_count=document_count
+            document_count=document_count,
+            has_template=has_template
         ))
 
     return result
@@ -314,5 +321,144 @@ def delete_workspace(
 
     db.delete(workspace)
     db.commit()
+
+    return None
+
+
+# ============ WORKSPACE TEMPLATE ENDPOINTS ============
+
+# API: Create or Update Workspace Template
+@router.put("/{workspace_id}/template", response_model=WorkspaceTemplateResponse, status_code=status.HTTP_200_OK)
+def create_or_update_workspace_template(
+    workspace_id: str,
+    template_data: WorkspaceTemplateCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(verify_api_key)
+):
+    """
+    Create or update a JSON schema template for a workspace.
+    All documents in this workspace must conform to this schema.
+    """
+    # Verify workspace belongs to user
+    workspace = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.user_id == current_user.id
+    ).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    # Validate the schema itself is valid JSON Schema
+    from jsonschema import Draft7Validator
+    try:
+        Draft7Validator.check_schema(template_data.json_schema)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON Schema: {str(e)}")
+
+    # Check if template already exists
+    existing_template = db.query(WorkspaceTemplate).filter(
+        WorkspaceTemplate.workspace_id == workspace_id
+    ).first()
+
+    if existing_template:
+        # Update existing template
+        existing_template.json_schema = json.dumps(template_data.json_schema)
+        db.commit()
+        db.refresh(existing_template)
+
+        return WorkspaceTemplateResponse(
+            id=existing_template.id,
+            workspace_id=existing_template.workspace_id,
+            json_schema=json.loads(existing_template.json_schema),
+            created_at=existing_template.created_at,
+            updated_at=existing_template.updated_at
+        )
+    else:
+        # Create new template
+        new_template = WorkspaceTemplate(
+            workspace_id=workspace_id,
+            json_schema=json.dumps(template_data.json_schema)
+        )
+        db.add(new_template)
+        db.commit()
+        db.refresh(new_template)
+
+        return WorkspaceTemplateResponse(
+            id=new_template.id,
+            workspace_id=new_template.workspace_id,
+            json_schema=json.loads(new_template.json_schema),
+            created_at=new_template.created_at,
+            updated_at=new_template.updated_at
+        )
+
+
+# API: Get Workspace Template
+@router.get("/{workspace_id}/template", response_model=WorkspaceTemplateResponse)
+def get_workspace_template(
+    workspace_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(verify_api_key)
+):
+    """
+    Get the JSON schema template for a workspace.
+    """
+    # Verify workspace belongs to user
+    workspace = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.user_id == current_user.id
+    ).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    # Get template
+    template = db.query(WorkspaceTemplate).filter(
+        WorkspaceTemplate.workspace_id == workspace_id
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Workspace template not found")
+
+    return WorkspaceTemplateResponse(
+        id=template.id,
+        workspace_id=template.workspace_id,
+        json_schema=json.loads(template.json_schema),
+        created_at=template.created_at,
+        updated_at=template.updated_at
+    )
+
+
+# API: Delete Workspace Template
+@router.delete("/{workspace_id}/template", status_code=status.HTTP_204_NO_CONTENT)
+def delete_workspace_template(
+    workspace_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(verify_api_key)
+):
+    """
+    Delete the JSON schema template for a workspace.
+    Existing documents are not affected, but new documents won't be validated.
+    """
+    # Verify workspace belongs to user
+    workspace = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.user_id == current_user.id
+    ).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    # Get and delete template
+    template = db.query(WorkspaceTemplate).filter(
+        WorkspaceTemplate.workspace_id == workspace_id
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Workspace template not found")
+
+    db.delete(template)
+    db.commit()
+
+    return None
 
     return None

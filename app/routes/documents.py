@@ -2,12 +2,40 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 import json
 
-from app.database import get_db, Document, DocumentVersion, User
+from app.database import get_db, Document, DocumentVersion, User, WorkspaceTemplate
 from app.schemas import DocumentCreate, DocumentUpdate, DocumentResponse, DocumentVersionResponse, DocumentWithVersionsResponse
 from app.auth import verify_api_key
 from app.utils import generate_document_id
+from app.template_validator import validate_json_against_schema
 
 router = APIRouter(prefix="/document", tags=["documents"])
+
+
+def validate_document_against_workspace_template(db: Session, workspace_id: str, json_data: dict) -> None:
+    """
+    Validate document JSON data against workspace template if it exists.
+    Raises HTTPException if validation fails.
+    """
+    if not workspace_id:
+        return  # No workspace, no validation needed
+
+    template = db.query(WorkspaceTemplate).filter(
+        WorkspaceTemplate.workspace_id == workspace_id
+    ).first()
+
+    if not template:
+        return  # No template, no validation needed
+
+    # Parse schema and validate
+    schema = json.loads(template.json_schema)
+    is_valid, error_message = validate_json_against_schema(json_data, schema)
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Document does not match workspace template: {error_message}"
+        )
+
 
 # API: Create Document
 @router.post("", response_model=DocumentResponse, status_code=201)
@@ -19,7 +47,14 @@ async def create_document(
     """
     Create a new document with JSON data.
     Requires valid API key in X-API-Key header.
+    If workspace_id is provided, validates against workspace template if it exists.
     """
+    # Validate against workspace template if workspace is specified
+    if document_data.workspace_id:
+        validate_document_against_workspace_template(
+            db, document_data.workspace_id, document_data.json_data
+        )
+
     # Generate unique document ID
     document_id = generate_document_id()
 
@@ -31,6 +66,7 @@ async def create_document(
     new_document = Document(
         id=document_id,
         user_id=user.id,
+        workspace_id=document_data.workspace_id,
         json_data=json.dumps(document_data.json_data),
         is_public=document_data.is_public,
         version=1
@@ -123,6 +159,12 @@ async def update_document(
     if document.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Validate against workspace template if document is in a workspace
+    if document_update.json_data is not None and document.workspace_id:
+        validate_document_against_workspace_template(
+            db, document.workspace_id, document_update.json_data
+        )
+
     # Save current version to history before updating
     if document_update.json_data is not None:
         version_snapshot = DocumentVersion(
@@ -162,6 +204,7 @@ async def patch_document(
     """
     Partially update a document's JSON data (merges with existing data).
     Must own the document.
+    Validates merged result against workspace template if applicable.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
 
@@ -174,6 +217,16 @@ async def patch_document(
 
     # Save current version to history and merge JSON data if provided (partial update)
     if document_update.json_data is not None:
+        existing_data = json.loads(document.json_data)
+        merged_data = {**existing_data, **document_update.json_data}
+
+        # Validate merged data against workspace template if document is in a workspace
+        if document.workspace_id:
+            validate_document_against_workspace_template(
+                db, document.workspace_id, merged_data
+            )
+
+        # Save version snapshot
         version_snapshot = DocumentVersion(
             document_id=document.id,
             json_data=document.json_data,
@@ -181,9 +234,7 @@ async def patch_document(
         )
         db.add(version_snapshot)
 
-        existing_data = json.loads(document.json_data)
-        existing_data.update(document_update.json_data)
-        document.json_data = json.dumps(existing_data)
+        document.json_data = json.dumps(merged_data)
         document.version += 1
 
     if document_update.is_public is not None:
