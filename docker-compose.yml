@@ -1,0 +1,22 @@
+# Local Postgres for development (so `npm run db:migrate` works offline).
+# In production, point DATABASE_URL at Neon instead and ignore this file.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: stashjson_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stashjson
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d stashjson"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

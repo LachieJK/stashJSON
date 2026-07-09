@@ -137,7 +137,7 @@ def list_workspace_documents(
 
 
 # API: From the passed in Document ID, fetch the next 25 Documents in the Workspace
-@router.get("/{workspace_id}/documents/{last_document_id}", response_model=List[DocumentResponse])
+@router.get("/{workspace_id}/document/{last_document_id}", response_model=List[DocumentResponse])
 def get_next_documents(
     workspace_id: str,
     last_document_id: str,
@@ -262,7 +262,7 @@ def update_workspace_name(
 
 
 # API: Remove Document from Workspace
-@router.delete("/{workspace_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{workspace_id}/document/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_document_from_workspace(
     workspace_id: str,
     document_id: str,

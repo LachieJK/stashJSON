@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db, User
 from app.schemas import APIKeyCreate, APIKeyResponse
 from app.utils import generate_api_key, hash_api_key
+from app.auth import verify_api_key
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -36,3 +37,26 @@ async def generate_new_api_key(
         api_key=api_key,
         message="API key generated successfully. Store this securely - it won't be shown again!"
     )
+
+
+@router.delete("/revoke-key", status_code=204)
+async def revoke_api_key(
+    current_user: User = Depends(verify_api_key),
+    db: Session = Depends(get_db)
+):
+    """
+    Revoke (delete) the current API key and associated user account.
+
+    This will:
+    - Delete the user account
+    - Delete all associated workspaces
+    - Delete all associated documents
+    - Cannot be undone!
+
+    Requires the API key to be provided in the X-API-Key header.
+    """
+    # Delete user (cascade will handle workspaces and documents)
+    db.delete(current_user)
+    db.commit()
+
+    return None

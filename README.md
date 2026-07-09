@@ -1,419 +1,123 @@
-# StashJSON - Simple JSON Document Storage
+# StashJSON — Simple JSON Document Storage
 
-A lightweight JSON storage system for developers. Store, retrieve, update, and delete JSON data via a simple REST API.
+A lightweight service for storing, versioning, and organizing JSON documents behind a simple REST API — plus a dashboard to manage it all.
 
-## Quick Start with Docker
+Built with **Next.js (App Router) + TypeScript**, **Prisma**, and **PostgreSQL**. The public API lives under `/api/*`; the dashboard is the rest of the app.
 
-### Prerequisites
+> Migrated from an earlier FastAPI/Python implementation, preserved under [`legacy/`](./legacy) for reference.
 
-- Docker Desktop installed
-- Docker Compose (included with Docker Desktop)
+## Quick start
 
-### 1. Start the Application
-
-```bash
-# Clone or navigate to the project directory
-cd stashJSON
-
-# Start both PostgreSQL and the API
-docker compose up -d
-
-# View logs (optional)
-docker compose logs -f
-```
-
-That's it! The application will:
-
-- Start PostgreSQL on port 5432
-- Start the API on port 8000
-- Start pgAdmin on port 5050
-- Automatically create database tables
-- Enable hot-reload for development
-
-### 2. Verify It's Running
-
-Visit `http://localhost:8000` - you should see:
-
-```json
-{
-  "message": "StashJSON API is running",
-  "docs": "/docs",
-  "version": "1.0.0"
-}
-```
-
-Visit `http://localhost:8000/docs` for interactive API documentation!
-
-### 3. Access pgAdmin
-
-1. Open `http://localhost:5050` in your browser
-2. Login with:
-
-   - **Email**: `admin@test.com`
-   - **Password**: `admin`
-
-3. Add your database server:
-   - Right-click "Servers" → "Register" → "Server"
-   - **General tab**:
-     - Name: `StashJSON DB` (or any name you like)
-   - **Connection tab**:
-     - Host: `postgres` (this is the Docker service name)
-     - Port: `5432`
-     - Database: `postgres`
-     - Username: `postgres`
-     - Password: `postgres`
-   - Click "Save"
-
-Now you can browse your database, run queries, and manage data through pgAdmin!
-
-### 4. Stop the Application
+### 1. Install dependencies
 
 ```bash
-# Stop containers
-docker compose down
-
-# Stop and remove volumes (deletes database data)
-docker compose down -v
+npm install
 ```
 
----
+### 2. Set up the database
 
-## Alternative: Manual Setup (Without Docker)
+Point `DATABASE_URL` at a Postgres instance in `.env` (copy from `.env.example`). Either:
 
-<details>
-<summary>Click to expand manual setup instructions</summary>
+- **Local (Docker):** `docker compose up -d` starts Postgres on `:5432` — the default `.env` already targets it.
+- **Hosted (Neon):** paste your Neon connection string into `.env`.
 
-### Prerequisites
-
-- Python 3.9+
-- PostgreSQL 12+
-- pgAdmin (already installed)
-
-### 1. Set Up PostgreSQL Database
-
-Since you have pgAdmin installed, let's create the database:
-
-1. **Open pgAdmin** and connect to your local PostgreSQL server
-2. **Create a new database**:
-
-   - Right-click on "Databases" → "Create" → "Database"
-   - Name: `stashjson_db`
-   - Owner: Create a new user or use `postgres`
-
-3. **Create a database user** (optional but recommended):
-   - Right-click on "Login/Group Roles" → "Create" → "Login/Group Role"
-   - General tab → Name: `stashjson_user`
-   - Definition tab → Password: `your_password_here`
-   - Privileges tab → Enable "Can login?"
-
-**Alternative: Using Terminal**
+Then create the tables:
 
 ```bash
-# Connect to PostgreSQL
-psql postgres
-
-# Create database and user
-CREATE DATABASE stashjson_db;
-CREATE USER stashjson_user WITH PASSWORD 'your_password_here';
-GRANT ALL PRIVILEGES ON DATABASE stashjson_db TO stashjson_user;
-
-# Exit
-\q
+npm run db:migrate
 ```
 
-### 2. Set Up Python Environment
+### 3. Run it
 
 ```bash
-# Create virtual environment
-python3 -m venv venv
-
-# Activate it
-source venv/document/activate  # On macOS/Linux
-
-# Install dependencies
-pip install -r requirements.txt
+npm run dev
 ```
 
-### 3. Configure Environment
+- Dashboard: <http://localhost:3000>
+- API base: <http://localhost:3000/api>
+
+In the dashboard, click **Generate new key**, then create workspaces and documents. The key is stored in your browser and sent as `X-API-Key`.
+
+## API reference
+
+All endpoints are under `/api`. Authenticated requests send `X-API-Key: <key>`.
+
+### Auth
 
 ```bash
-# Copy example env file
-cp .env.example .env
+# Create a user and get a one-time API key
+curl -X POST http://localhost:3000/api/auth/generate-key \
+  -H "Content-Type: application/json" -d '{"email":"you@example.com"}'
 
-# Edit .env with your database credentials
-# Update DATABASE_URL with your actual password
+# Delete your account and all its data
+curl -X DELETE http://localhost:3000/api/auth/revoke-key -H "X-API-Key: KEY"
 ```
 
-Your `.env` should look like:
-
-```
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
-APP_ENV=development
-```
-
-### 4. Run the Application
+### Documents
 
 ```bash
-# From project root
-uvicorn app.main:app --reload
+# Create
+curl -X POST http://localhost:3000/api/documents \
+  -H "Content-Type: application/json" -H "X-API-Key: KEY" \
+  -d '{"json_data":{"hello":"world"},"is_public":false}'
+
+# Read (public docs need no key)          GET    /api/documents/{id}
+# Replace                                 PUT    /api/documents/{id}
+# Merge (shallow)                         PATCH  /api/documents/{id}
+# Delete                                  DELETE /api/documents/{id}
+# Version history                         GET    /api/documents/{id}/versions
+# A single version                        GET    /api/documents/{id}/versions/{n}
 ```
 
-The API will be available at `http://localhost:8000`
-
-### 5. Test It Out
-
-Visit `http://localhost:8000/docs` for interactive API documentation!
-
-</details>
-
----
-
-## API Usage
-
-### 1. Generate an API Key
+### Workspaces
 
 ```bash
-curl -X POST "http://localhost:8000/auth/generate-key" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "optional@example.com"}'
+# Create / list                          POST|GET  /api/workspaces
+# Get / rename / delete                  GET|PUT|DELETE /api/workspaces/{id}
+# Documents in a workspace (25/page)     GET /api/workspaces/{id}/documents?after={lastId}
 ```
 
-**Response:**
+Deleting a workspace keeps its documents (their `workspace_id` becomes null).
 
-```json
-{
-  "api_key": "your-generated-api-key-here",
-  "message": "API key generated successfully. Store this securely - it won't be shown again!"
-}
-```
+### Workspace templates
 
-⚠️ **IMPORTANT**: Save this API key! You'll need it for all subsequent requests.
-
-### 2. Create a Document
+A workspace can enforce a JSON Schema (Draft-07) that every document in it must satisfy.
 
 ```bash
-curl -X POST "http://localhost:8000/documents/" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key-here" \
-  -d '{
-    "json_data": {"hello": "world", "test": true},
-    "is_public": false
-  }'
+# Set / get / delete the template
+curl -X PUT http://localhost:3000/api/workspaces/{id}/template \
+  -H "Content-Type: application/json" -H "X-API-Key: KEY" \
+  -d '{"json_schema":{"type":"object","required":["name"],"properties":{"name":{"type":"string"}}}}'
 ```
 
-### 3. Get a Document
+A document that violates the schema is rejected with `400`. For `PATCH`, the merged result is validated.
 
-```bash
-curl -X GET "http://localhost:8000/documents/{document_id}" \
-  -H "X-API-Key: your-api-key-here"
-```
-
-### 4. Update a Document
-
-```bash
-curl -X PUT "http://localhost:8000/documents/{document_id}" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key-here" \
-  -d '{
-    "json_data": {"updated": "data"},
-    "is_public": true
-  }'
-```
-
-### 5. Delete a Document
-
-```bash
-curl -X DELETE "http://localhost:8000/documents/{document_id}" \
-  -H "X-API-Key: your-api-key-here"
-```
-
-## Workspaces
-
-Workspaces allow you to organize documents into collections.
-
-### 1. Create a Workspace
-
-```bash
-curl -X POST "http://localhost:8000/workspace" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key-here" \
-  -d '{
-    "name": "My Project Workspace"
-  }'
-```
-
-**Response:**
-
-```json
-{
-  "id": "workspace-uuid-here",
-  "name": "My Project Workspace",
-  "created_at": "2024-01-05T10:30:00",
-  "updated_at": "2024-01-05T10:30:00",
-  "document_count": 0
-}
-```
-
-### 2. List All Workspaces
-
-```bash
-curl -X GET "http://localhost:8000/workspace" \
-  -H "X-API-Key: your-api-key-here"
-```
-
-### 3. Get Documents in a Workspace
-
-```bash
-curl -X GET "http://localhost:8000/workspace/{workspace_id}/documents" \
-  -H "X-API-Key: your-api-key-here"
-```
-
-### 4. Update Workspace Name
-
-```bash
-curl -X PUT "http://localhost:8000/workspace/{workspace_id}" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key-here" \
-  -d '{
-    "name": "Updated Workspace Name"
-  }'
-```
-
-### 5. Remove Document from Workspace
-
-```bash
-curl -X DELETE "http://localhost:8000/workspace/{workspace_id}/documents/{document_id}" \
-  -H "X-API-Key: your-api-key-here"
-```
-
-**Note:** This removes the document from the workspace but doesn't delete it. The document remains accessible via its ID.
-
-### 6. Delete Workspace
-
-```bash
-curl -X DELETE "http://localhost:8000/workspace/{workspace_id}" \
-  -H "X-API-Key: your-api-key-here"
-```
-
-**Note:** Documents in the workspace are not deleted, only unassociated from the workspace.
-
-## Project Structure
+## Project layout
 
 ```
-stashJSON/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app setup
-│   ├── config.py            # Configuration management
-│   ├── database.py          # Database models and connection
-│   ├── schemas.py           # Pydantic models for validation
-│   ├── auth.py              # Authentication middleware
-│   ├── utils.py             # Utility functions
-│   └── routes/
-│       ├── __init__.py
-│       ├── auth.py          # API key generation endpoints
-│       ├── documents.py     # CRUD endpoints for documents
-│       └── workspaces.py    # Workspace management endpoints
-├── .dockerignore            # Docker ignore file
-├── .env.example             # Example environment config
-├── .gitignore
-├── docker compose.yml       # Docker Compose configuration
-├── Dockerfile               # Docker image definition
-├── requirements.txt         # Python dependencies
-└── README.md
+app/
+  api/**            # public REST API (route handlers)
+  page.tsx          # dashboard home (API key + workspaces)
+  workspaces/[id]/  # workspace detail (documents, template, versions)
+lib/                # server logic: db, auth, schemas, serializers, validators
+prisma/schema.prisma
+legacy/             # original FastAPI implementation (reference only)
 ```
 
-## Docker Commands
+See [`CLAUDE.md`](./CLAUDE.md) for architecture details.
 
-```bash
-# Start services
-docker compose up -d
+## Scripts
 
-# View logs
-docker compose logs -f api          # API logs only
-docker compose logs -f postgres     # Database logs only
-docker compose logs -f pgadmin      # pgAdmin logs only
-docker compose logs -f              # All logs
-
-# Restart services
-docker compose restart
-
-# Stop services
-docker compose down
-
-# Rebuild after code changes (if needed)
-docker compose up -d --build
-
-# Access PostgreSQL directly (via CLI)
-docker exec -it stashjson_db psql -U postgres -d postgres
-
-# View running containers
-docker compose ps
-```
-
-## Accessing Services
-
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **pgAdmin**: http://localhost:5050 (login: admin@admin.com / admin)
-- **PostgreSQL**: localhost:5432 (connect from pgAdmin using host: `postgres`)
-
-## Features
-
-✅ **Phase 1 Complete** - Core API working locally:
-
-- ✅ POST /documents - Create document
-- ✅ GET /documents/{id} - Read document
-- ✅ PUT /documents/{id} - Update document
-- ✅ PATCH /documents/{id} - Partial update
-- ✅ DELETE /documents/{id} - Delete document
-- ✅ POST /workspace - Create workspace
-- ✅ GET /workspace - List workspaces
-- ✅ GET /workspace/{id}/documents - List documents in workspace
-- ✅ PUT /workspace/{id} - Update workspace name
-- ✅ DELETE /workspace/{id}/documents/{document_id} - Remove document from workspace
-- ✅ Local PostgreSQL database
-- ✅ Simple API key authentication (hashed in DB)
-- ✅ Public/private document support
-- ✅ Version history for documents
-- ✅ Workspace organization
-- ✅ Timestamps for creation and updates
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` | Production build (also typechecks) |
+| `npm run db:migrate` | Create/apply a Prisma migration |
+| `npm run db:studio` | Browse the database |
 
 ## Roadmap
 
-### Phase 2: Deploy to AWS (not optimized)
-
-- Deploy to EC2 or ECS
-- Use RDS PostgreSQL
-- Basic production setup
-
-### Phase 3+: Optimizations & Features
-
-- CloudFront caching
-- Redis layer (ElastiCache)
-- S3 for large/cold JSON
-- Rate limiting
-- Usage analytics
-- Paid plans
-- Size limits per tier
-- Email recovery for API keys
-
----
-
-## Ideal Architecture (Future)
-
-```
-Client
-↓
-CloudFront (cheap global cache)
-↓
-ALB
-↓
-Stateless API (ECS / Fargate or EC2 ASG)
-↓
-Redis (ElastiCache)
-↓
-RDS Postgres (Multi-AZ)
-↓
-S3 (for large / cold JSON)
-```
+- Web login + subscription tiers (Stripe)
+- Rate limiting and per-tier size limits
+- Query/index inside stored JSON (JSONB)
+- Deploy to Vercel + Neon

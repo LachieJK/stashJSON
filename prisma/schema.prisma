@@ -1,0 +1,85 @@
+// StashJSON data model.
+// Ported from the legacy SQLAlchemy models in legacy/app/database.py.
+// Key change: JSON is stored natively as `Json` (JSONB) instead of serialized Text.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(uuid())
+  apiKeyHash String   @unique @map("api_key_hash")
+  email      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  workspaces Workspace[]
+  documents  Document[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents Document[]
+  template  WorkspaceTemplate?
+
+  @@index([userId])
+  @@map("workspaces")
+}
+
+model WorkspaceTemplate {
+  id          String   @id @default(uuid())
+  workspaceId String   @unique @map("workspace_id")
+  jsonSchema  Json     @map("json_schema")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_templates")
+}
+
+model Document {
+  // 16-char nanoid, generated in application code (see lib/utils.ts).
+  id          String   @id
+  userId      String   @map("user_id")
+  workspaceId String?  @map("workspace_id")
+  jsonData    Json     @map("json_data")
+  isPublic    Boolean  @default(false) @map("is_public")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Deleting a workspace nulls the FK; the document itself survives.
+  workspace Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  versions  DocumentVersion[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id         String   @id @default(uuid())
+  documentId String   @map("document_id")
+  jsonData   Json     @map("json_data")
+  version    Int
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("document_versions")
+}
