@@ -1,25 +1,29 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { handle, parseBody } from "@/lib/http";
 import { apiKeyCreateSchema } from "@/lib/schemas";
-import { generateApiKey, hashApiKey } from "@/lib/utils";
+import { issueApiKey, KEY_REVEAL_MESSAGE } from "@/lib/apiKeys";
 
-// POST /api/auth/generate-key — create a user and return a one-time API key.
+// POST /api/auth/generate-key — legacy, keyless onboarding: create an anonymous
+// account plus one API key and return the raw key once. Kept for backward
+// compatibility with existing API consumers; new users should sign up and manage
+// keys from the account page instead. Email is now the web-login identifier, so
+// we assign a synthetic unique email here rather than trusting the body value.
 export async function POST(req: Request) {
   return handle(async () => {
-    const body = await parseBody(req, apiKeyCreateSchema);
+    await parseBody(req, apiKeyCreateSchema);
 
-    const apiKey = generateApiKey();
-    await prisma.user.create({
-      data: { apiKeyHash: hashApiKey(apiKey), email: body?.email ?? null },
+    const user = await prisma.user.create({
+      data: {
+        name: "API key user",
+        email: `apikey_${randomUUID()}@stashjson.local`,
+      },
     });
+    const { raw } = await issueApiKey(user.id, "Default key");
 
     return NextResponse.json(
-      {
-        api_key: apiKey,
-        message:
-          "API key generated successfully. Store this securely - it won't be shown again!",
-      },
+      { api_key: raw, message: KEY_REVEAL_MESSAGE },
       { status: 201 },
     );
   });

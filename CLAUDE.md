@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 StashJSON is a JSON-document storage service: developers authenticate with an API key, store arbitrary JSON as documents, organize them into workspaces, enforce a JSON Schema per workspace, and get automatic version history on every update.
 
-It is a **Next.js (App Router) + TypeScript** app — one repo containing both the public REST API (`app/api/**`) and a React dashboard (`app/page.tsx`, `app/workspaces/**`). Data is in **PostgreSQL** via **Prisma**.
+It is a **Next.js (App Router) + TypeScript** app — one repo containing both the public REST API (`app/api/**`) and a **Tailwind**-styled web app. Data is in **PostgreSQL** via **Prisma**. The UI is split into route groups: `app/(marketing)/**` (public landing, `/pricing`, `/docs`), `app/(auth)/**` (`/login`, `/signup`), and `app/(dashboard)/**` (session-guarded `/dashboard`, `/workspaces/[id]`, `/account`).
 
 > The original **FastAPI + SQLAlchemy** implementation was migrated to this stack. It is preserved read-only under `legacy/` for reference — do not edit it; port behavior from it.
 
@@ -35,13 +35,16 @@ Everything server-side lives in `lib/` and is consumed by thin route handlers in
 - `lib/db.ts` — Prisma client singleton (validated `DATABASE_URL` from `lib/env.ts`).
 - `lib/http.ts` — `ApiError` (status + message), `handle()` (wraps a route body, turning thrown `ApiError`/`ZodError` into `{ detail }` JSON responses), and `parseBody()` (reads + Zod-validates the body). **Every route handler wraps its logic in `handle(async () => { ... })`** — that's the error-handling contract; don't add try/catch in routes.
 - `lib/schemas.ts` — Zod request schemas. **API field names are snake_case** (`json_data`, `is_public`, `workspace_id`) to preserve the public contract; Prisma models are camelCase. `lib/serializers.ts` maps rows → snake_case responses.
-- `lib/auth.ts` — `requireApiKey(req)` (throws 401) and `resolveUser(key)` (nullable) for owner-or-public reads.
+- `lib/auth.ts` — API-key + session auth. `requireApiKey(req)` (X-API-Key only, 401), `resolveUser(key)` (nullable, looks up the `ApiKey` table), and **`requireUser(req)`** — *dual auth* accepting either a valid `X-API-Key` or a Better Auth web-session cookie. Resource routes (documents/workspaces) use `requireUser` so the dashboard authenticates by cookie while external clients keep using keys. `requireSessionUser(headers?)` is cookie-only (account/key management).
+- `lib/betterAuth.ts` / `lib/authClient.ts` — **Better Auth** (email/password web login). It owns the `User`/`Session`/`Account`/`Verification` tables and is mounted at `app/api/auth/[...all]/route.ts`. `getServerSession()` reads the session in Server Components; `getSessionFromHeaders(headers)` reads it from a request in route handlers.
+- `lib/apiKeys.ts` — `issueApiKey(userId, name)` mints a public API key (raw returned once, only the SHA-256 hash stored). Keys are managed from `/account` via `app/api/keys/**`.
+- `lib/plans.ts` — static subscription-plan catalog for `/pricing`. Inert: no Stripe/billing yet (a marked seam awaits the next stage).
 - `lib/documents.ts` / `lib/workspaces.ts` — shared resource loaders (`loadOwnedDocument`, `loadOwnedWorkspace`), the public-or-owner read guard (`assertCanRead`), and template enforcement (`assertMatchesWorkspaceTemplate`).
 - `lib/templateValidator.ts` — Ajv (Draft-07) for the **user-supplied** workspace JSON Schemas. Note the split: **Zod** validates our own API contracts; **Ajv** validates the schemas users upload and the documents against them.
 
 ### Data model (`prisma/schema.prisma`)
 
-`User → Workspace → Document → DocumentVersion`, plus `WorkspaceTemplate` (1:1 with `Workspace`). Key points:
+`User → Workspace → Document → DocumentVersion`, plus `WorkspaceTemplate` (1:1 with `Workspace`). `User` is now the human identity (unique `email`, `name`, `tier`), owning `ApiKey[]` (public keys) and Better Auth's `Session[]`/`Account[]` (web login); `Verification` is standalone. Key points:
 
 - JSON is stored as **native `Json` (JSONB)** — no manual serialize/parse.
 - Cascades: delete `User` → workspaces/documents; delete `Document` → versions; delete `Workspace` → its template. **Deleting a workspace nulls each document's `workspaceId` (`onDelete: SetNull`) — documents are never deleted with their workspace.**
@@ -52,7 +55,7 @@ Everything server-side lives in `lib/` and is consumed by thin route handlers in
 - **Versioning**: `PUT`/`PATCH` snapshot the current `jsonData` into `DocumentVersion` **before** writing and incrementing `version`, inside a `prisma.$transaction`. `PUT` replaces; `PATCH` shallow-merges (`{ ...existing, ...update }`).
 - **Template enforcement**: create/replace inside a templated workspace validates the data; `PATCH` validates the **merged** result. Uploaded schemas are checked with Ajv before being stored.
 - **Reads**: public documents are readable by anyone; private ones require the API key to resolve to the owner (`assertCanRead`).
-- **Auth surfaces**: the public API uses API keys (SHA-256 hashed, never stored plaintext). The dashboard reuses the same key from `localStorage` (`app/providers.tsx`). Web login/subscriptions are a future addition, not built yet.
+- **Auth surfaces**: the public API uses API keys (SHA-256 hashed, never plaintext, stored in the `ApiKey` table — a user may hold several). The web app uses **Better Auth** email/password sessions (httpOnly cookie); `middleware.ts` does a fast cookie-presence redirect for dashboard routes and the `(dashboard)` layout does the authoritative DB-backed check. `POST /api/auth/generate-key` remains as a legacy keyless-onboarding endpoint (creates an anonymous user + key). Subscriptions/billing are scaffolded (`/pricing`, `User.tier`) but not yet wired.
 
 ### Routing notes
 

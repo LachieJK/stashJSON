@@ -1,12 +1,35 @@
 import type {
+  ApiKey,
   Document,
   DocumentVersion,
+  User,
   Workspace,
   WorkspaceTemplate,
 } from "@prisma/client";
 
 // Map Prisma rows (camelCase) to the snake_case JSON the public API returns,
 // preserving parity with the legacy FastAPI responses.
+
+export function userResponse(user: User) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    tier: user.tier,
+    created_at: user.createdAt,
+  };
+}
+
+// Metadata only — the raw key and its hash are NEVER serialized.
+export function apiKeyResponse(key: ApiKey) {
+  return {
+    id: key.id,
+    name: key.name,
+    last_used_at: key.lastUsedAt,
+    created_at: key.createdAt,
+    revoked_at: key.revokedAt,
+  };
+}
 
 export function documentResponse(doc: Document) {
   return {

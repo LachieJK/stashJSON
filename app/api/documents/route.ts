@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { ApiError, handle, parseBody } from "@/lib/http";
-import { requireApiKey } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { documentCreateSchema } from "@/lib/schemas";
 import { generateDocumentId } from "@/lib/utils";
 import { assertMatchesWorkspaceTemplate } from "@/lib/documents";
@@ -11,7 +11,7 @@ import { documentResponse } from "@/lib/serializers";
 // POST /api/documents — create a document (optionally inside a workspace).
 export async function POST(req: Request) {
   return handle(async () => {
-    const user = await requireApiKey(req);
+    const user = await requireUser(req);
     const body = await parseBody(req, documentCreateSchema);
 
     if (body.workspace_id) {

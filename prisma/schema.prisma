@@ -11,16 +11,110 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// The human identity. Web login (email/password) is handled by Better Auth,
+// which owns the Session/Account/Verification tables below and expects the
+// `name`, `email`, `emailVerified`, `image`, and `updatedAt` fields here.
+// Public REST API keys live in the separate `ApiKey` table (many per user).
+
 model User {
-  id         String   @id @default(uuid())
-  apiKeyHash String   @unique @map("api_key_hash")
-  email      String?
-  createdAt  DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  name             String
+  email            String   @unique
+  emailVerified    Boolean  @default(false) @map("email_verified")
+  image            String?
+  tier             PlanTier @default(FREE)
+  // Billing seam — populated in the subscriptions stage; unwired for now.
+  stripeCustomerId String?  @unique @map("stripe_customer_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   workspaces Workspace[]
   documents  Document[]
+  apiKeys    ApiKey[]
+  sessions   Session[]
+  accounts   Account[]
 
   @@map("users")
+}
+
+// Subscription tier. Billing (Stripe) is wired in the next stage; for now this
+// just records what plan a user is on, defaulting everyone to FREE.
+
+enum PlanTier {
+  FREE
+  PRO
+  TEAM
+}
+
+// Public programmatic API keys (the `X-API-Key` contract). Stored SHA-256
+// hashed, never plaintext (see lib/utils.ts). A user may hold several — rotate
+// a leaked key by revoking it and issuing a new one without losing documents.
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  keyHash    String    @unique @map("key_hash")
+  name       String
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_keys")
+}
+
+// --- Better Auth tables (web sessions / credentials). Field names match what
+// Better Auth expects; @map keeps DB columns snake_case per repo convention. ---
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String    @map("user_id")
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("verifications")
 }
 
 model Workspace {

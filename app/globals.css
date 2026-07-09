@@ -1,237 +1,101 @@
-:root {
-  --bg: #0b0e14;
-  --panel: #141922;
-  --panel-2: #1c2230;
-  --border: #2a3242;
-  --text: #e6e9ef;
-  --muted: #8b93a7;
-  --accent: #5b9dff;
-  --accent-2: #3f7fe0;
-  --danger: #ff6b6b;
-  --ok: #4ade80;
-  --radius: 10px;
+@import "tailwindcss";
+
+/*
+ * Design tokens — ported from the original hand-rolled palette so the dark-first
+ * look (and the light-mode override) is preserved now that we're on Tailwind v4.
+ * Each token becomes a utility, e.g. --color-panel → `bg-panel`, `border-panel`.
+ */
+@theme {
+  --color-bg: #0b0e14;
+  --color-panel: #141922;
+  --color-panel-2: #1c2230;
+  --color-border: #2a3242;
+  --color-text: #e6e9ef;
+  --color-muted: #8b93a7;
+  --color-accent: #5b9dff;
+  --color-accent-2: #3f7fe0;
+  --color-danger: #ff6b6b;
+  --color-ok: #4ade80;
+
+  --radius-card: 10px;
+
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Light mode mirrors the original @media override — same tokens, lighter values. */
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f5f7fb;
-    --panel: #ffffff;
-    --panel-2: #eef1f7;
-    --border: #d8dee9;
-    --text: #1b2230;
-    --muted: #667085;
-    --accent: #2563eb;
-    --accent-2: #1d4ed8;
+    --color-bg: #f5f7fb;
+    --color-panel: #ffffff;
+    --color-panel-2: #eef1f7;
+    --color-border: #d8dee9;
+    --color-text: #1b2230;
+    --color-muted: #667085;
+    --color-accent: #2563eb;
+    --color-accent-2: #1d4ed8;
   }
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+
+  a {
+    color: var(--color-accent);
+  }
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  line-height: 1.5;
-}
+/*
+ * Reusable component classes. Tailwind-first, but centralized so dashboard, auth,
+ * docs, and marketing pages share one vocabulary instead of repeating utility
+ * strings. Compose freely with utilities at call sites.
+ */
+@layer components {
+  .card {
+    @apply rounded-[var(--radius-card)] border border-border bg-panel p-5;
+  }
 
-.site-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
-}
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center rounded-lg border border-transparent
+      bg-accent px-3.5 py-2 text-sm font-semibold text-white transition-colors
+      hover:bg-accent-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply border-border bg-transparent text-text hover:bg-panel-2;
+  }
+  .btn-danger {
+    @apply border-border bg-transparent text-danger hover:bg-danger/10;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs;
+  }
 
-.brand {
-  font-weight: 700;
-  font-size: 18px;
-  color: var(--text);
-  text-decoration: none;
-}
-.brand span {
-  color: var(--accent);
-}
+  .input {
+    @apply w-full rounded-lg border border-border bg-panel-2 px-3 py-2 text-sm text-text
+      outline-none placeholder:text-muted focus:border-accent;
+  }
+  .label {
+    @apply mb-1.5 block text-[13px] text-muted;
+  }
 
-.badge {
-  font-size: 12px;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  padding: 2px 8px;
-  border-radius: 999px;
-}
+  .pill {
+    @apply inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[11px] text-muted;
+  }
+  .pill-public {
+    @apply border-ok text-ok;
+  }
 
-.container {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-}
-
-.card h2 {
-  margin: 0 0 4px;
-  font-size: 16px;
-}
-.card .hint {
-  margin: 0 0 16px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.spread {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-input[type="text"],
-input[type="email"],
-textarea {
-  width: 100%;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 9px 11px;
-  font-size: 14px;
-  font-family: inherit;
-}
-
-textarea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  min-height: 120px;
-  resize: vertical;
-}
-
-label {
-  display: block;
-  font-size: 13px;
-  color: var(--muted);
-  margin: 0 0 6px;
-}
-
-button {
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 9px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-button:hover {
-  background: var(--accent-2);
-}
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-button.secondary {
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-button.secondary:hover {
-  background: var(--panel-2);
-}
-button.danger {
-  background: transparent;
-  color: var(--danger);
-  border: 1px solid var(--border);
-}
-button.danger:hover {
-  background: rgba(255, 107, 107, 0.1);
-}
-button.small {
-  padding: 5px 10px;
-  font-size: 12px;
-}
-
-a {
-  color: var(--accent);
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.item {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  background: var(--panel-2);
-}
-
-.item .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-.pill.public {
-  color: var(--ok);
-  border-color: var(--ok);
-}
-
-pre {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  overflow-x: auto;
-  font-size: 12px;
-  margin: 8px 0 0;
-}
-
-.notice {
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  border: 1px solid var(--border);
-}
-.notice.error {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: rgba(255, 107, 107, 0.08);
-}
-.notice.success {
-  color: var(--ok);
-  border-color: var(--ok);
-  background: rgba(74, 222, 128, 0.08);
-}
-
-.muted {
-  color: var(--muted);
-  font-size: 13px;
+  .notice {
+    @apply rounded-lg border border-border px-3 py-2.5 text-[13px];
+  }
+  .notice-error {
+    @apply border-danger bg-danger/10 text-danger;
+  }
+  .notice-success {
+    @apply border-ok bg-ok/10 text-ok;
+  }
 }

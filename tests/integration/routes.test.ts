@@ -61,10 +61,10 @@ describe.skipIf(!enabled)("route handlers (DB-backed)", () => {
     const res = await POST(req);
     expect(res.status).toBe(201);
     const body = (await res.json()) as { api_key: string };
-    const user = await prisma.user.findUnique({
-      where: { apiKeyHash: (await import("@/lib/utils")).hashApiKey(body.api_key) },
+    const key = await prisma.apiKey.findUnique({
+      where: { keyHash: (await import("@/lib/utils")).hashApiKey(body.api_key) },
     });
-    if (user) createdUserIds.push(user.id);
+    if (key) createdUserIds.push(key.userId);
     return body.api_key;
   }
 
@@ -308,6 +308,107 @@ describe.skipIf(!enabled)("route handlers (DB-backed)", () => {
       });
       expect(survivor).not.toBeNull();
       expect(survivor?.workspaceId).toBeNull();
+    });
+  });
+
+  // Sign up through Better Auth and return the resulting session cookie header.
+  async function signUpSession(email: string): Promise<string> {
+    const { POST } = await import("@/app/api/auth/[...all]/route");
+    const res = await POST(
+      new Request("http://test/api/auth/sign-up/email", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ email, password: "sup3r-secret-pw", name: "Test" }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const cookie = res.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0])
+      .join("; ");
+    expect(cookie).toContain("session");
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user) createdUserIds.push(user.id);
+    return cookie;
+  }
+
+  describe("web session (cookie) auth", () => {
+    it("authenticates a resource route via the session cookie, no API key", async () => {
+      const cookie = await signUpSession("session-auth@test.local");
+
+      const wsMod = await import("@/app/api/workspaces/route");
+      const res = await wsMod.POST(
+        new Request("http://test/api/workspaces", {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie },
+          body: JSON.stringify({ name: "Via session" }),
+        }),
+      );
+      expect(res.status).toBe(201);
+      expect((await res.json()).name).toBe("Via session");
+    });
+  });
+
+  describe("API key management (session-authed)", () => {
+    it("creates, lists, uses, then revokes a key", async () => {
+      const cookie = await signUpSession("keys@test.local");
+      const cookieHeaders = { "content-type": "application/json", cookie };
+
+      // Mint a named key via the account endpoint.
+      const keysMod = await import("@/app/api/keys/route");
+      const createRes = await keysMod.POST(
+        new Request("http://test/api/keys", {
+          method: "POST",
+          headers: cookieHeaders,
+          body: JSON.stringify({ name: "CI key" }),
+        }),
+      );
+      expect(createRes.status).toBe(201);
+      const created = (await createRes.json()) as {
+        api_key: string;
+        key: { id: string; name: string };
+      };
+      expect(created.api_key).toBeTruthy();
+      expect(created.key.name).toBe("CI key");
+
+      // It shows up in the list.
+      const listRes = await keysMod.GET(
+        new Request("http://test/api/keys", { headers: cookieHeaders }),
+      );
+      expect(listRes.status).toBe(200);
+      const list = (await listRes.json()) as Array<{ id: string; name: string }>;
+      expect(list.some((k) => k.id === created.key.id)).toBe(true);
+
+      // The raw key authenticates the public API as X-API-Key.
+      const wsMod = await import("@/app/api/workspaces/route");
+      const okRes = await wsMod.POST(
+        new Request("http://test/api/workspaces", {
+          method: "POST",
+          headers: jsonHeaders(created.api_key),
+          body: JSON.stringify({ name: "Via key" }),
+        }),
+      );
+      expect(okRes.status).toBe(201);
+
+      // Revoke it, then the same key is rejected.
+      const revokeMod = await import("@/app/api/keys/[id]/route");
+      const revokeRes = await revokeMod.DELETE(
+        new Request(`http://test/api/keys/${created.key.id}`, {
+          method: "DELETE",
+          headers: cookieHeaders,
+        }),
+        { params: Promise.resolve({ id: created.key.id }) },
+      );
+      expect(revokeRes.status).toBe(204);
+
+      const blocked = await wsMod.POST(
+        new Request("http://test/api/workspaces", {
+          method: "POST",
+          headers: jsonHeaders(created.api_key),
+          body: JSON.stringify({ name: "Should fail" }),
+        }),
+      );
+      expect(blocked.status).toBe(401);
     });
   });
 });

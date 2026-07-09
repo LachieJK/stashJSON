@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { handle, parseBody } from "@/lib/http";
-import { requireApiKey } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { workspaceCreateSchema } from "@/lib/schemas";
 import { workspaceResponse } from "@/lib/serializers";
 
 // POST /api/workspaces — create a workspace.
 export async function POST(req: Request) {
   return handle(async () => {
-    const user = await requireApiKey(req);
+    const user = await requireUser(req);
     const body = await parseBody(req, workspaceCreateSchema);
 
     const workspace = await prisma.workspace.create({
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 // GET /api/workspaces — list the caller's workspaces with document counts.
 export async function GET(req: Request) {
   return handle(async () => {
-    const user = await requireApiKey(req);
+    const user = await requireUser(req);
 
     const workspaces = await prisma.workspace.findMany({
       where: { userId: user.id },

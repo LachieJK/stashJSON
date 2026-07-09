@@ -29,3 +29,8 @@ export const workspaceUpdateSchema = workspaceCreateSchema;
 export const workspaceTemplateSchema = z.object({
   json_schema: jsonObject,
 });
+
+// Naming a programmatic API key when minting it from the account page.
+export const apiKeyNameSchema = z.object({
+  name: z.string().min(1).max(100),
+});

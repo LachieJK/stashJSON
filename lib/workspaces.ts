@@ -1,14 +1,14 @@
 import type { User, Workspace } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/http";
-import { requireApiKey } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 
 /** Load a workspace that must exist and be owned by the caller. */
 export async function loadOwnedWorkspace(
   req: Request,
   id: string,
 ): Promise<{ user: User; workspace: Workspace }> {
-  const user = await requireApiKey(req);
+  const user = await requireUser(req);
   const workspace = await prisma.workspace.findFirst({
     where: { id, userId: user.id },
   });
