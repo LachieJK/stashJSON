@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { ApiKeyProvider } from "@/app/providers";
 
 export const metadata: Metadata = {
@@ -14,9 +15,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <ApiKeyProvider>
           <header className="site-header">
-            <a href="/" className="brand">
+            <Link href="/" className="brand">
               Stash<span>JSON</span>
-            </a>
+            </Link>
             <span className="badge">dashboard</span>
           </header>
           <main className="container">{children}</main>
