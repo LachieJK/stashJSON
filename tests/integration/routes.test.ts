@@ -48,7 +48,7 @@ const jsonHeaders = (apiKey?: string) => ({
 });
 
 describe.skipIf(!enabled)("route handlers (DB-backed)", () => {
-  let prisma: import("@prisma/client").PrismaClient;
+  let prisma: import("@/prisma/generated/client").PrismaClient;
   const createdUserIds: string[] = [];
 
   async function newUserKey(email?: string): Promise<string> {

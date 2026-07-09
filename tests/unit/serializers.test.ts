@@ -4,7 +4,7 @@ import type {
   DocumentVersion,
   Workspace,
   WorkspaceTemplate,
-} from "@prisma/client";
+} from "@/prisma/generated/client";
 import {
   documentResponse,
   documentVersionResponse,

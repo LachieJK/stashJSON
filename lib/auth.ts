@@ -1,4 +1,4 @@
-import type { User } from "@prisma/client";
+import type { User } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
 import { hashApiKey } from "@/lib/utils";
 import { ApiError } from "@/lib/http";

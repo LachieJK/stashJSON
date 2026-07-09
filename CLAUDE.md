@@ -24,7 +24,7 @@ npm run db:generate  # regenerate the Prisma client after editing schema.prisma
 npm run db:studio    # browse data in Prisma Studio
 ```
 
-**Node isn't on the default PATH here** — it's Homebrew's at `/opt/homebrew/opt/node/bin`. Prefix commands with `export PATH="/opt/homebrew/opt/node/bin:$PATH"` if `node`/`npm` aren't found.
+**Node isn't on the default PATH here.** Prisma 7 requires Node `^20.19 || ^22.12 || >=24` (enforced by `engines` in `package.json`; see `.nvmrc`), so use Homebrew's keg-only Node 24: `export PATH="/opt/homebrew/opt/node@24/bin:$PATH"`. The unversioned `/opt/homebrew/opt/node/bin` is Node 23, which Prisma 7 does **not** support.
 
 **A database is required for anything DB-backed.** Either `docker compose up -d` (local Postgres, see `docker-compose.yml`) or set `DATABASE_URL` to a Neon connection string in `.env`. Then `npm run db:migrate` before first run. `.env.example` documents both.
 
@@ -32,7 +32,8 @@ npm run db:studio    # browse data in Prisma Studio
 
 Everything server-side lives in `lib/` and is consumed by thin route handlers in `app/api/**`:
 
-- `lib/db.ts` — Prisma client singleton (validated `DATABASE_URL` from `lib/env.ts`).
+- `lib/db.ts` — Prisma client singleton, built on the **`@prisma/adapter-pg` driver adapter** (Prisma 7 removed the Rust query engine, so an adapter is mandatory) with the validated `DATABASE_URL` from `lib/env.ts`. The client is generated into `prisma/generated/` (gitignored) — **import Prisma types from `@/prisma/generated/client`, not `@prisma/client`**.
+- `prisma.config.ts` — Prisma **CLI** config (migrate/studio/generate). Prisma 7 no longer accepts `url` in `schema.prisma` nor auto-loads `.env`, so this file does both. It reads `process.env.DATABASE_URL` rather than Prisma's `env()` helper on purpose: `env()` throws when the variable is missing and every CLI command loads this file, which would break `postinstall`'s `prisma generate` in an env without a `.env`.
 - `lib/http.ts` — `ApiError` (status + message), `handle()` (wraps a route body, turning thrown `ApiError`/`ZodError` into `{ detail }` JSON responses), and `parseBody()` (reads + Zod-validates the body). **Every route handler wraps its logic in `handle(async () => { ... })`** — that's the error-handling contract; don't add try/catch in routes.
 - `lib/schemas.ts` — Zod request schemas. **API field names are snake_case** (`json_data`, `is_public`, `workspace_id`) to preserve the public contract; Prisma models are camelCase. `lib/serializers.ts` maps rows → snake_case responses.
 - `lib/auth.ts` — API-key + session auth. `requireApiKey(req)` (X-API-Key only, 401), `resolveUser(key)` (nullable, looks up the `ApiKey` table), and **`requireUser(req)`** — *dual auth* accepting either a valid `X-API-Key` or a Better Auth web-session cookie. Resource routes (documents/workspaces) use `requireUser` so the dashboard authenticates by cookie while external clients keep using keys. `requireSessionUser(headers?)` is cookie-only (account/key management).

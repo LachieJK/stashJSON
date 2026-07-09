@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
 import { ApiError, handle, parseBody } from "@/lib/http";
 import { workspaceTemplateSchema } from "@/lib/schemas";

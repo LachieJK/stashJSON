@@ -1,4 +1,4 @@
-import type { Document, User } from "@prisma/client";
+import type { Document, User } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/http";
 import { requireUser, resolveRequestUser } from "@/lib/auth";
