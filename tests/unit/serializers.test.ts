@@ -1,14 +1,18 @@
 import { describe, it, expect } from "vitest";
 import type {
+  ApiKey,
   Document,
   DocumentVersion,
+  User,
   Workspace,
   WorkspaceTemplate,
 } from "@/prisma/generated/client";
 import {
+  apiKeyResponse,
   documentResponse,
   documentVersionResponse,
   templateResponse,
+  userResponse,
   workspaceResponse,
 } from "@/lib/serializers";
 
@@ -98,6 +102,69 @@ describe("workspaceResponse", () => {
     expect(out.has_template).toBeUndefined();
     expect(out.id).toBe("ws_1");
     expect(out.name).toBe("My Workspace");
+  });
+});
+
+describe("userResponse", () => {
+  it("maps a User row to snake_case and hides internal fields", () => {
+    const created = new Date("2026-01-01T00:00:00.000Z");
+    const user = {
+      id: "user_1",
+      name: "Ada",
+      email: "ada@example.com",
+      emailVerified: true,
+      image: null,
+      tier: "FREE",
+      stripeCustomerId: "cus_123",
+      createdAt: created,
+      updatedAt: new Date(),
+    } as unknown as User;
+
+    const out = userResponse(user);
+    expect(out).toEqual({
+      id: "user_1",
+      name: "Ada",
+      email: "ada@example.com",
+      tier: "FREE",
+      created_at: created,
+    });
+    // Billing/internal fields must not leak onto the wire.
+    expect(out).not.toHaveProperty("stripeCustomerId");
+    expect(out).not.toHaveProperty("emailVerified");
+  });
+});
+
+describe("apiKeyResponse", () => {
+  it("returns metadata only — never the key hash or owner id", () => {
+    const created = new Date("2026-06-06T00:00:00.000Z");
+    const key = {
+      id: "key_1",
+      userId: "user_1",
+      keyHash: "deadbeef".repeat(8),
+      name: "CI key",
+      lastUsedAt: null,
+      createdAt: created,
+      revokedAt: null,
+    } as unknown as ApiKey;
+
+    const out = apiKeyResponse(key);
+    expect(out).toEqual({
+      id: "key_1",
+      name: "CI key",
+      last_used_at: null,
+      created_at: created,
+      revoked_at: null,
+    });
+    expect(Object.keys(out).sort()).toEqual([
+      "created_at",
+      "id",
+      "last_used_at",
+      "name",
+      "revoked_at",
+    ]);
+    expect(JSON.stringify(out)).not.toContain("deadbeef");
+    expect(out).not.toHaveProperty("keyHash");
+    expect(out).not.toHaveProperty("userId");
   });
 });
 
