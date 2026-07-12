@@ -38,9 +38,18 @@
     monospace;
 }
 
-/* Light mode = the white page: same tokens, inverted values. */
+/*
+ * Light mode = the white page: same tokens, inverted values.
+ *
+ * Mode resolution: the page defaults to the browser's prefers-color-scheme.
+ * The floating ThemeToggle stores an explicit override as data-theme on <html>
+ * ("light" | "dark"); no attribute means "follow the system". CSS cannot share
+ * a ruleset across a media-query boundary, so the light values appear twice —
+ * keep both blocks in sync.
+ */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
     --color-bg: #ffffff;
     --color-panel: #fafafa;
     --color-panel-2: #f2f2f2;
@@ -56,7 +65,27 @@
   }
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-panel: #fafafa;
+  --color-panel-2: #f2f2f2;
+  --color-border: #eaeaea;
+  --color-text: #000000;
+  --color-muted: #666666;
+  --color-accent: #000000;
+  --color-accent-2: #333333;
+  --color-danger: #e00000;
+  --color-ok: #0f9d58;
+  --color-info: #0068d6;
+  --color-warn: #b45309;
+}
+
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   body {
     background: var(--color-bg);
     color: var(--color-text);
@@ -161,5 +190,35 @@
   /* Code/JSON blocks: mono, scroll inside the box, never the page. */
   .codeblock {
     @apply overflow-x-auto rounded-md border border-border bg-bg p-3 font-mono text-xs leading-relaxed;
+  }
+
+  /* Floating light/dark toggle: circular, bottom-right, flat (hairline border,
+   * no shadow, per the brief). ≥44px hit target. */
+  .theme-toggle {
+    @apply fixed right-4 bottom-4 z-50 inline-flex size-11 cursor-pointer items-center justify-center
+      rounded-full border border-border bg-panel text-muted transition-colors
+      hover:border-muted hover:text-text;
+  }
+
+  /* Icon swap is pure CSS keyed off the same conditions as the palette above,
+   * so it can never disagree with the active theme (and needs no JS to render
+   * the right icon on first paint). Dark shows the sun (click → light);
+   * light shows the moon (click → dark). */
+  .theme-toggle-moon {
+    display: none;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .theme-toggle-sun {
+      display: none;
+    }
+    :root:not([data-theme="dark"]) .theme-toggle-moon {
+      display: block;
+    }
+  }
+  :root[data-theme="light"] .theme-toggle-sun {
+    display: none;
+  }
+  :root[data-theme="light"] .theme-toggle-moon {
+    display: block;
   }
 }

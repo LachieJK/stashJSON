@@ -72,6 +72,36 @@ to badge/code-sized elements, and pass AA contrast in both modes.
   are the sanctioned exception, per above.)
 - Hover/focus feedback is a small tonal shift or inversion, in the Vercel way.
 
+### Colour modes & the theme toggle
+
+- The page **defaults to the browser's `prefers-color-scheme`** (dark = black
+  page, light = white page).
+- A **floating circular toggle** sits fixed in the **bottom-right corner** of
+  every page: hairline border, panel background, flat (no shadow), ≥44px hit
+  target. It shows the Lucide **sun** icon in dark mode and **moon** in light
+  mode (the icon names the mode you'll switch to).
+- An explicit choice is applied as `data-theme="light" | "dark"` on `<html>`
+  and persisted in `localStorage` (restored pre-paint by an inline script in
+  `app/layout.tsx`). Toggling back to the system's own preference clears the
+  override so the page resumes following the browser setting.
+- Token overrides in `app/globals.css` must cover **both** paths — the
+  `prefers-color-scheme` media query (gated on `:not([data-theme="dark"])`)
+  and the `[data-theme]` attribute — and the two light-value blocks must be
+  kept in sync.
+
+## Iconography
+
+- **Icon pack: Lucide** (lucide.dev, ISC licence) — stroke-based, minimalist,
+  the natural companion to Geist. Use it for every icon in the product; never
+  mix packs.
+- Icons are **inlined as SVG** (no npm dependency): 24×24 viewBox,
+  `stroke="currentColor"`, `stroke-width="2"`, round caps/joins, `fill="none"`,
+  rendered at ~16–20px. They inherit text colour — no colour of their own
+  (the badge/semantic exceptions above still apply).
+- Icons are aids, not decoration: use one only where it clarifies an action or
+  state, always with an accessible label (`aria-label` on the control,
+  `aria-hidden` on the SVG).
+
 ## Shape, spacing & texture
 
 - **Flat.** No drop shadows for depth — hairline borders and background tonal
