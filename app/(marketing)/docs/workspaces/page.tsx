@@ -11,7 +11,7 @@ export default function DocsWorkspacesPage() {
       </p>
 
       <h2 className="mt-8 text-lg font-semibold">Workspace shape</h2>
-      <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+      <pre className="codeblock mt-3">
         <code>{`{
   "id": "b1f0c2a4-1e2d-4c3b-9a8f-0d1e2f3a4b5c",
   "name": "Production configs",
@@ -118,7 +118,7 @@ export default function DocsWorkspacesPage() {
         the workspace is validated against it.
       </p>
 
-      <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+      <pre className="codeblock mt-3">
         <code>{`// Template shape
 {
   "id": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f90",

@@ -1,38 +1,58 @@
 @import "tailwindcss";
 
 /*
- * Design tokens — ported from the original hand-rolled palette so the dark-first
- * look (and the light-mode override) is preserved now that we're on Tailwind v4.
+ * Design tokens — the monochrome-first palette from .claude/design/design-brief.md.
+ * Dark = pure-black page, light = pure-white page; the accent is always the
+ * INVERSE of the page (white buttons on black, black buttons on white).
  * Each token becomes a utility, e.g. --color-panel → `bg-panel`, `border-panel`.
+ *
+ * Colour is reserved for small functional pops only: semantic states (danger/ok),
+ * badges/pills (HTTP verbs — info/warn cover GET and PUT/PATCH), and code accents.
  */
 @theme {
-  --color-bg: #0b0e14;
-  --color-panel: #141922;
-  --color-panel-2: #1c2230;
-  --color-border: #2a3242;
-  --color-text: #e6e9ef;
-  --color-muted: #8b93a7;
-  --color-accent: #5b9dff;
-  --color-accent-2: #3f7fe0;
-  --color-danger: #ff6b6b;
+  --color-bg: #000000;
+  --color-panel: #0a0a0a;
+  --color-panel-2: #111111;
+  --color-border: #333333;
+  --color-text: #ffffff;
+  --color-muted: #a1a1a1;
+  --color-accent: #ffffff;
+  --color-accent-2: #cccccc;
+  --color-danger: #ff4d4d;
   --color-ok: #4ade80;
+  /* Badge/code-only pop colours (brief: named tokens, AA in both modes). */
+  --color-info: #52a8ff;
+  --color-warn: #fbbf24;
 
-  --radius-card: 10px;
+  --radius-card: 8px;
 
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Motion: minimal and fast — transitions default to 150ms. */
+  --default-transition-duration: 150ms;
 }
 
-/* Light mode mirrors the original @media override — same tokens, lighter values. */
+/* Font tokens reference the next/font CSS variables set on <html>, so they
+ * must stay `inline` (the var() is resolved at the usage site). */
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+}
+
+/* Light mode = the white page: same tokens, inverted values. */
 @media (prefers-color-scheme: light) {
   :root {
-    --color-bg: #f5f7fb;
-    --color-panel: #ffffff;
-    --color-panel-2: #eef1f7;
-    --color-border: #d8dee9;
-    --color-text: #1b2230;
-    --color-muted: #667085;
-    --color-accent: #2563eb;
-    --color-accent-2: #1d4ed8;
+    --color-bg: #ffffff;
+    --color-panel: #fafafa;
+    --color-panel-2: #f2f2f2;
+    --color-border: #eaeaea;
+    --color-text: #000000;
+    --color-muted: #666666;
+    --color-accent: #000000;
+    --color-accent-2: #333333;
+    --color-danger: #e00000;
+    --color-ok: #0f9d58;
+    --color-info: #0068d6;
+    --color-warn: #b45309;
   }
 }
 
@@ -40,12 +60,35 @@
   body {
     background: var(--color-bg);
     color: var(--color-text);
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     line-height: 1.5;
   }
 
-  a {
-    color: var(--color-accent);
+  code,
+  kbd,
+  pre {
+    font-family: var(--font-mono);
+  }
+
+  /* Keyboard focus is always visible: a ring in the page-inverse accent. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-text);
+    color: var(--color-bg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -55,47 +98,68 @@
  * strings. Compose freely with utilities at call sites.
  */
 @layer components {
+  /* Flat surface: hairline border + tonal step. No shadows. */
   .card {
     @apply rounded-[var(--radius-card)] border border-border bg-panel p-5;
   }
 
+  /* Primary action = the inverted block. text-bg flips with the page —
+   * black-on-white buttons in light mode, white-on-black in dark. */
   .btn {
-    @apply inline-flex cursor-pointer items-center justify-center rounded-lg border border-transparent
-      bg-accent px-3.5 py-2 text-sm font-semibold text-white transition-colors
+    @apply inline-flex cursor-pointer items-center justify-center rounded-md border border-transparent
+      bg-accent px-3.5 py-2 text-sm font-medium text-bg transition-colors
       hover:bg-accent-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-secondary {
-    @apply border-border bg-transparent text-text hover:bg-panel-2;
+    @apply border-border bg-transparent text-text hover:border-muted hover:bg-transparent;
   }
   .btn-danger {
-    @apply border-border bg-transparent text-danger hover:bg-danger/10;
+    @apply border-border bg-transparent text-danger hover:border-danger hover:bg-danger/10;
   }
   .btn-sm {
     @apply px-2.5 py-1.5 text-xs;
   }
 
+  /* Focus = border inversion (border flips to the accent) plus a soft ring. */
   .input {
-    @apply w-full rounded-lg border border-border bg-panel-2 px-3 py-2 text-sm text-text
-      outline-none placeholder:text-muted focus:border-accent;
+    @apply w-full rounded-md border border-border bg-panel-2 px-3 py-2 text-sm text-text
+      transition-colors outline-none placeholder:text-muted
+      focus:border-accent focus:ring-2 focus:ring-accent/25;
   }
   .label {
     @apply mb-1.5 block text-[13px] text-muted;
   }
 
+  /* Inline text link: full-contrast text, hairline underline that firms on hover. */
+  .link {
+    @apply font-medium text-text underline decoration-muted underline-offset-4
+      transition-colors hover:decoration-text;
+  }
+
   .pill {
-    @apply inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[11px] text-muted;
+    @apply inline-flex items-center rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted;
   }
   .pill-public {
     @apply border-ok text-ok;
   }
 
   .notice {
-    @apply rounded-lg border border-border px-3 py-2.5 text-[13px];
+    @apply rounded-md border border-border px-3 py-2.5 text-[13px];
   }
   .notice-error {
     @apply border-danger bg-danger/10 text-danger;
   }
   .notice-success {
     @apply border-ok bg-ok/10 text-ok;
+  }
+
+  /* A list row inside a card: nested surface, hairline border. */
+  .row {
+    @apply rounded-[var(--radius-card)] border border-border bg-panel-2 px-3.5 py-3;
+  }
+
+  /* Code/JSON blocks: mono, scroll inside the box, never the page. */
+  .codeblock {
+    @apply overflow-x-auto rounded-md border border-border bg-bg p-3 font-mono text-xs leading-relaxed;
   }
 }

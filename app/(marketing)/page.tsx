@@ -3,17 +3,17 @@ import Link from "next/link";
 // Landing page. Deliberately simple — the product is a developer tool.
 export default function LandingPage() {
   return (
-    <div className="mx-auto max-w-3xl px-6 py-20">
+    <div className="mx-auto max-w-4xl px-6 py-24 sm:py-32">
       <section className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+        <h1 className="text-5xl font-extrabold tracking-tighter text-balance sm:text-7xl">
           JSON storage that just works
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-muted">
+        <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted">
           Store arbitrary JSON documents, organize them into workspaces, enforce
           a schema per workspace, and get automatic version history on every
           update — all behind a simple REST API.
         </p>
-        <div className="mt-8 flex justify-center gap-3">
+        <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link href="/signup" className="btn">
             Get started free
           </Link>
@@ -23,7 +23,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="mt-16 grid gap-4 sm:grid-cols-3">
+      <section className="mt-24 grid gap-4 sm:grid-cols-3">
         {[
           {
             title: "Schema enforcement",

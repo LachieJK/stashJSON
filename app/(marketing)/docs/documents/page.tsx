@@ -13,7 +13,7 @@ export default function DocsDocumentsPage() {
       </p>
 
       <h2 className="mt-8 text-lg font-semibold">Document shape</h2>
-      <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+      <pre className="codeblock mt-3">
         <code>{`{
   "id": "V1StGXR8Z5jdHi6B",
   "json_data": { "name": "Ada", "role": "admin" },
@@ -110,7 +110,7 @@ export default function DocsDocumentsPage() {
         state as a version snapshot.
       </p>
 
-      <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+      <pre className="codeblock mt-3">
         <code>{`// Version shape
 {
   "id": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",

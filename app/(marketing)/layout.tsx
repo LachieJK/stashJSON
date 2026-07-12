@@ -15,13 +15,13 @@ export default async function MarketingLayout({
 
   return (
     <>
-      <header className="flex items-center gap-4 border-b border-border bg-panel px-6 py-3.5">
+      <header className="flex items-center gap-4 border-b border-border bg-bg px-6 py-3.5">
         <Brand />
         <nav className="ml-auto flex items-center gap-4 text-sm">
-          <Link href="/docs" className="text-muted hover:text-text">
+          <Link href="/docs" className="text-muted transition-colors hover:text-text">
             Docs
           </Link>
-          <Link href="/pricing" className="text-muted hover:text-text">
+          <Link href="/pricing" className="text-muted transition-colors hover:text-text">
             Pricing
           </Link>
           {session ? (
@@ -33,7 +33,7 @@ export default async function MarketingLayout({
             </>
           ) : (
             <>
-              <Link href="/login" className="text-muted hover:text-text">
+              <Link href="/login" className="text-muted transition-colors hover:text-text">
                 Log in
               </Link>
               <Link href="/signup" className="btn btn-sm">

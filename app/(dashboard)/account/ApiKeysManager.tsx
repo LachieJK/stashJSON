@@ -101,7 +101,7 @@ export function ApiKeysManager() {
           {keys.map((k) => (
             <div
               key={k.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-panel-2 px-3.5 py-3"
+              className="flex items-center justify-between gap-3 row"
             >
               <div>
                 <div className="font-semibold">{k.name}</div>
