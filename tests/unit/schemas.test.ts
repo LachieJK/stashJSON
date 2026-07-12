@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   apiKeyCreateSchema,
+  apiKeyNameSchema,
   documentCreateSchema,
   documentUpdateSchema,
   workspaceCreateSchema,
   workspaceTemplateSchema,
+  workspaceUpdateSchema,
 } from "@/lib/schemas";
 
 describe("apiKeyCreateSchema", () => {
@@ -120,5 +122,74 @@ describe("workspaceTemplateSchema", () => {
     expect(
       workspaceTemplateSchema.safeParse({ json_schema: "nope" }).success,
     ).toBe(false);
+  });
+});
+
+describe("documentCreateSchema — type strictness", () => {
+  it("rejects a stringly-typed is_public (no coercion)", () => {
+    expect(
+      documentCreateSchema.safeParse({ json_data: {}, is_public: "true" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejects a non-string workspace_id", () => {
+    expect(
+      documentCreateSchema.safeParse({ json_data: {}, workspace_id: 123 })
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejects null json_data (required field)", () => {
+    expect(documentCreateSchema.safeParse({ json_data: null }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("documentUpdateSchema — type strictness", () => {
+  it("rejects a stringly-typed is_public", () => {
+    expect(documentUpdateSchema.safeParse({ is_public: "yes" }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts explicit nulls (meaning: no change)", () => {
+    const result = documentUpdateSchema.safeParse({
+      json_data: null,
+      is_public: null,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("workspaceUpdateSchema", () => {
+  it("enforces the same 1..255 name rules as create", () => {
+    expect(workspaceUpdateSchema.safeParse({ name: "Renamed" }).success).toBe(
+      true,
+    );
+    expect(workspaceUpdateSchema.safeParse({ name: "" }).success).toBe(false);
+    expect(
+      workspaceUpdateSchema.safeParse({ name: "x".repeat(256) }).success,
+    ).toBe(false);
+    expect(workspaceUpdateSchema.safeParse({ name: 42 }).success).toBe(false);
+  });
+});
+
+describe("apiKeyNameSchema", () => {
+  it("accepts a name within 1..100 chars", () => {
+    expect(apiKeyNameSchema.safeParse({ name: "CI key" }).success).toBe(true);
+    expect(
+      apiKeyNameSchema.safeParse({ name: "x".repeat(100) }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an empty, missing, over-long, or non-string name", () => {
+    expect(apiKeyNameSchema.safeParse({ name: "" }).success).toBe(false);
+    expect(apiKeyNameSchema.safeParse({}).success).toBe(false);
+    expect(
+      apiKeyNameSchema.safeParse({ name: "x".repeat(101) }).success,
+    ).toBe(false);
+    expect(apiKeyNameSchema.safeParse({ name: 7 }).success).toBe(false);
   });
 });

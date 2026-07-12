@@ -75,4 +75,64 @@ describe("validateAgainstSchema", () => {
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/^Schema validation error:/);
   });
+
+  it("renders nested instance paths as `a -> b`", () => {
+    const nested = {
+      type: "object",
+      properties: {
+        outer: {
+          type: "object",
+          properties: { inner: { type: "number" } },
+        },
+      },
+    };
+    const result = validateAgainstSchema({ outer: { inner: "no" } }, nested);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/^Validation error at outer -> inner:/);
+  });
+
+  it("enforces string formats via ajv-formats (e.g. email)", () => {
+    const schema = {
+      type: "object",
+      properties: { contact: { type: "string", format: "email" } },
+    };
+    expect(validateAgainstSchema({ contact: "a@b.com" }, schema).valid).toBe(
+      true,
+    );
+    expect(
+      validateAgainstSchema({ contact: "not-an-email" }, schema).valid,
+    ).toBe(false);
+  });
+
+  // Regression: templates are re-read from the DB on every request, so the same
+  // schema arrives as a *fresh object each time*. A shared Ajv instance caches
+  // by `$id` and threw `schema with key or id "..." already exists` on the
+  // second call — every document after the first was rejected, and repeat
+  // template uploads 400'd.
+  describe("repeat validation of a schema carrying $id (regression)", () => {
+    const makeSchema = () => ({
+      $id: "https://example.com/stashjson-regression-schema",
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+    });
+
+    it("validateAgainstSchema stays correct across repeated calls", () => {
+      expect(validateAgainstSchema({ name: "one" }, makeSchema()).valid).toBe(
+        true,
+      );
+      // Fresh object, same $id — must not be poisoned by a compile cache.
+      expect(validateAgainstSchema({ name: "two" }, makeSchema()).valid).toBe(
+        true,
+      );
+      expect(validateAgainstSchema({ name: 3 }, makeSchema()).valid).toBe(
+        false,
+      );
+    });
+
+    it("isValidJsonSchema accepts the same $id schema more than once", () => {
+      expect(isValidJsonSchema(makeSchema()).valid).toBe(true);
+      expect(isValidJsonSchema(makeSchema()).valid).toBe(true);
+    });
+  });
 });
