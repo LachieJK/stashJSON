@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
+import { normalizeDatabaseUrl } from "./lib/databaseUrl";
 
 // Prisma 7 moved the datasource URL out of schema.prisma and stopped auto-loading
 // .env — hence the `dotenv/config` import above. This config is only read by the
@@ -14,5 +15,5 @@ import { defineConfig } from "prisma/config";
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: { path: "prisma/migrations" },
-  datasource: { url: process.env.DATABASE_URL ?? "" },
+  datasource: { url: normalizeDatabaseUrl(process.env.DATABASE_URL ?? "") },
 });

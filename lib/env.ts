@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeDatabaseUrl } from "@/lib/databaseUrl";
 
 // Validate environment variables once, at startup. Replaces the pydantic-settings
 // Settings class from legacy/app/config.py.
@@ -10,7 +11,7 @@ const devDefault = <T extends string>(value: T | undefined, fallback: T): T =>
   isProd ? (value as T) : (value ?? fallback);
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.string().url().transform(normalizeDatabaseUrl),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   // Better Auth: signs session cookies and derives keys. Must be a real secret
   // in production; a fixed dev value keeps local sessions stable across reloads.
