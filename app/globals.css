@@ -200,6 +200,130 @@
       hover:border-muted hover:text-text;
   }
 
+  /*
+   * Landing-page texture system — the "framed schematic". Structure is the
+   * only decoration: hairline rails bound the content column, full-bleed
+   * rules separate sections, + ticks mark rail/rule intersections, and a
+   * hatched band or two provide texture. Token colours only.
+   */
+
+  /* The framed column: its side borders stack section-to-section into
+   * continuous full-page rails. */
+  .frame-col {
+    @apply relative mx-auto max-w-4xl border-x border-border;
+  }
+
+  /* Sections own their top border so rules run edge-to-edge across the rails. */
+  .section-rule {
+    @apply border-t border-border;
+  }
+
+  /* A small + centered on a rail/rule intersection. Drawn with the two
+   * pseudo-elements; positioned at a .frame-col's top corners. */
+  .tick {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    color: var(--color-muted);
+    pointer-events: none;
+  }
+  .tick::before,
+  .tick::after {
+    content: "";
+    position: absolute;
+    background: currentColor;
+  }
+  .tick::before {
+    top: 5px;
+    right: 0;
+    left: 0;
+    height: 1px;
+  }
+  .tick::after {
+    top: 0;
+    bottom: 0;
+    left: 5px;
+    width: 1px;
+  }
+  .tick-tl {
+    top: -6px;
+    left: -6px;
+  }
+  .tick-tr {
+    top: -6px;
+    right: -6px;
+  }
+
+  /* Mono section label, set on the rule line. */
+  .eyebrow {
+    @apply font-mono text-[11px] tracking-[0.2em] uppercase text-muted;
+  }
+
+  /* Ambient write pulses: light streaks travelling down the rails. One per
+   * rail per section, scattered in time via --pulse-delay/--pulse-duration
+   * set inline at the call site. Each streak is clipped to its section and
+   * pauses off-screen before looping. The global reduced-motion guard
+   * collapses the animation, leaving the rail plain. */
+  .rail-pulse {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .rail-pulse-r {
+    left: auto;
+    right: -1px;
+  }
+  .rail-pulse::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 180px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      var(--color-text),
+      transparent
+    );
+    opacity: 0.9;
+    animation: rail-pulse var(--pulse-duration, 6.5s) linear infinite;
+    animation-delay: var(--pulse-delay, 0s);
+  }
+
+  /*
+   * Living-document hero: one document cycling v1 → v2 → v3 on a 12s loop,
+   * with superseded versions accumulating beneath it. The v3 state and both
+   * history rows are the elements' *base* styles, so when the reduced-motion
+   * guard collapses the animations the demo freezes on its final frame.
+   * The three states share one opacity envelope, offset by negative delays.
+   */
+  .doc-cycle-1,
+  .doc-cycle-2 {
+    opacity: 0;
+  }
+  .doc-cycle-1 {
+    animation: doc-cycle 12s infinite;
+  }
+  .doc-cycle-2 {
+    animation: doc-cycle 12s infinite;
+    animation-delay: -8s;
+  }
+  .doc-cycle-3 {
+    animation: doc-cycle 12s infinite;
+    animation-delay: -4s;
+  }
+  .doc-history-1 {
+    animation: doc-history-1 12s infinite;
+  }
+  .doc-history-2 {
+    animation: doc-history-2 12s infinite;
+  }
+
   /* Icon swap is pure CSS keyed off the same conditions as the palette above,
    * so it can never disagree with the active theme (and needs no JS to render
    * the right icon on first paint). Dark shows the sun (click → light);
@@ -220,5 +344,55 @@
   }
   :root[data-theme="light"] .theme-toggle-moon {
     display: block;
+  }
+}
+
+@keyframes rail-pulse {
+  from {
+    transform: translateY(-180px);
+  }
+  to {
+    /* Far enough to clear even tall mobile sections before looping. */
+    transform: translateY(150vh);
+  }
+}
+
+/* Visible for the first third of the loop, hidden for the rest; the 100%
+ * frame crossfades back into the next cycle's opening state. */
+@keyframes doc-cycle {
+  0%,
+  30% {
+    opacity: 1;
+  }
+  33.3%,
+  96.7% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* v1's snapshot appears once v2 is written (1/3 into the loop)... */
+@keyframes doc-history-1 {
+  0%,
+  32% {
+    opacity: 0;
+  }
+  38%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ...and v2's once v3 is written (2/3 in). Both clear at the loop reset. */
+@keyframes doc-history-2 {
+  0%,
+  65% {
+    opacity: 0;
+  }
+  71%,
+  100% {
+    opacity: 1;
   }
 }
