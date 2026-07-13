@@ -1,16 +1,5 @@
 import type { ReactNode } from "react";
-
-type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-
-// Token-backed text/border colour per HTTP verb — the sanctioned colour pops
-// on the monochrome base (see the design brief's badge exception).
-const METHOD_COLORS: Record<Method, string> = {
-  GET: "text-info border-info",
-  POST: "text-ok border-ok",
-  PUT: "text-warn border-warn",
-  PATCH: "text-warn border-warn",
-  DELETE: "text-danger border-danger",
-};
+import { MethodBadge, type Method } from "../_components";
 
 function CodeBlock({ label, code }: { label: string; code: string }) {
   return (
@@ -43,11 +32,7 @@ export function Endpoint({
   return (
     <div className="card mt-4">
       <div className="flex flex-wrap items-center gap-3">
-        <span
-          className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-xs font-semibold ${METHOD_COLORS[method]}`}
-        >
-          {method}
-        </span>
+        <MethodBadge method={method} />
         <code className="font-mono text-sm break-all">{path}</code>
       </div>
       <p className="mt-3 text-sm text-muted">{description}</p>
