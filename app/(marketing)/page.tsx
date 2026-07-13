@@ -123,7 +123,8 @@ function RailPulse({
 
 export default function LandingPage() {
   return (
-    <div className="overflow-x-clip">
+    // pt-6 breathes between the floating navbar and the frame's top ticks.
+    <div className="overflow-x-clip pt-6">
       {/* Hero — headline plus the living document. */}
       <section>
         <div className="frame-col px-6 pt-24 pb-20 text-center sm:pt-32">
@@ -131,12 +132,13 @@ export default function LandingPage() {
           <RailPulse side="left" delay="-2s" duration="6.5s" />
           <RailPulse side="right" delay="-5.5s" duration="8s" />
           <h1 className="text-5xl font-extrabold tracking-tighter text-balance sm:text-7xl">
-            JSON storage that just works
+            Store Fast. <br className="mb-3"></br> Build Faster.
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted">
-            Store arbitrary JSON documents, organize them into workspaces,
-            enforce a schema per workspace, and get automatic version history
-            on every update — all behind a simple REST API.
+            Built for developers who want to ship faster. We are a light-weight JSON
+            backend that lets you store documents, organise them into workspaces,
+            enforce schemas, and track every change automatically. No database setup,
+            just a simple REST API that gets out of your way.
           </p>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
             <Link href="/signup" className="btn">
@@ -158,7 +160,7 @@ export default function LandingPage() {
           <RailPulse side="left" delay="-4s" duration="7.5s" />
           <p className="eyebrow">How it works</p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            From zero to versioned in three requests
+            Seriously. That's it.
           </h2>
           <ol className="relative mt-12 flex max-w-2xl flex-col gap-10">
             <span
@@ -203,7 +205,7 @@ export default function LandingPage() {
           <div className="px-6 pt-20">
             <p className="eyebrow">Features</p>
             <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-              Everything your JSON needs
+              The Good Stuff.
             </h2>
           </div>
           <div className="mt-12 grid border-t border-border sm:grid-cols-2">
@@ -236,10 +238,10 @@ export default function LandingPage() {
         <div className="frame-col px-6 py-24 text-center">
           <Ticks />
           <h2 className="text-4xl font-extrabold tracking-tighter sm:text-5xl">
-            Start stashing
+            Start Stashing.
           </h2>
           <p className="mx-auto mt-4 max-w-md text-muted">
-            Free to start — your first document is one POST away.
+            Free to start. Your first document is one POST away.
           </p>
           <Link href="/signup" className="btn mt-8">
             Get started free

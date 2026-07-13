@@ -192,6 +192,68 @@
     @apply overflow-x-auto rounded-md border border-border bg-bg p-3 font-mono text-xs leading-relaxed;
   }
 
+  /*
+   * Floating navbar — one global bar on every page (marketing, auth,
+   * dashboard). Detached from the viewport edges, pinned by the sticky shell;
+   * the bar itself is a hairline-bordered translucent panel with backdrop
+   * blur, so content scrolling underneath frosts through. Flat, per the brief.
+   */
+  .nav-shell {
+    @apply sticky top-0 z-40 px-3 pt-3 sm:px-6;
+  }
+  .navbar {
+    @apply relative mx-auto flex h-14 max-w-[80vw] items-center gap-4
+      rounded-[var(--radius-card)] border border-border bg-bg/75 px-4
+      backdrop-blur-md sm:px-5;
+  }
+
+  /* Nav link: muted → full contrast, with a hairline underline that slides in
+   * on hover and stays put on the active route. The global reduced-motion
+   * guard collapses the slide to an instant swap. */
+  .nav-link {
+    @apply relative py-1 text-sm text-muted transition-colors hover:text-text;
+  }
+  .nav-link::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 150ms ease;
+  }
+  .nav-link:hover::after,
+  .nav-link[aria-current="page"]::after {
+    transform: scaleX(1);
+  }
+  .nav-link[aria-current="page"] {
+    color: var(--color-text);
+  }
+
+  /* Icon-only control in the bar (mobile menu trigger): 40px hit target. */
+  .nav-icon-btn {
+    @apply inline-flex size-10 shrink-0 cursor-pointer items-center justify-center
+      rounded-md border border-border bg-transparent text-muted
+      transition-colors hover:border-muted hover:text-text;
+  }
+
+  /* Mobile disclosure panel: hangs below the bar, same frosted treatment. */
+  .nav-menu {
+    @apply absolute inset-x-0 top-full mt-2 flex flex-col gap-0.5
+      rounded-[var(--radius-card)] border border-border bg-bg/90 p-2
+      backdrop-blur-md;
+  }
+  .nav-menu-link {
+    @apply flex min-h-10 w-full items-center rounded-md px-3 text-left text-sm text-muted
+      transition-colors hover:bg-panel-2 hover:text-text;
+  }
+  .nav-menu-link[aria-current="page"] {
+    @apply bg-panel-2 text-text;
+  }
+
   /* Floating light/dark toggle: circular, bottom-right, flat (hairline border,
    * no shadow, per the brief). ≥44px hit target. */
   .theme-toggle {
@@ -344,6 +406,15 @@
   }
   :root[data-theme="light"] .theme-toggle-moon {
     display: block;
+  }
+}
+
+/* Browsers without backdrop-filter get a solid page-colour bar instead of a
+ * translucent one, so nav text never sits on unblurred scrolling content. */
+@supports not (backdrop-filter: blur(1px)) {
+  .navbar,
+  .nav-menu {
+    background: var(--color-bg);
   }
 }
 
