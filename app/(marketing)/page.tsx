@@ -160,7 +160,7 @@ export default function LandingPage() {
           <RailPulse side="left" delay="-4s" duration="7.5s" />
           <p className="eyebrow">How it works</p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            Seriously. That's it.
+            Seriously. That’s it.
           </h2>
           <ol className="relative mt-12 flex max-w-2xl flex-col gap-10">
             <span
