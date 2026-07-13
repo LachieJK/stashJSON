@@ -84,7 +84,7 @@ function SignupForm() {
       </form>
       <p className="mt-4 text-center text-sm text-muted">
         Already have an account?{" "}
-        <Link href="/login" className="text-accent">
+        <Link href="/login" className="link">
           Log in
         </Link>
       </p>

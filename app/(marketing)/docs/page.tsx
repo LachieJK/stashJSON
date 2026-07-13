@@ -12,7 +12,7 @@ export default function DocsOverviewPage() {
       </p>
 
       <h2 className="mt-8 text-lg font-semibold">Base URL</h2>
-      <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+      <pre className="codeblock mt-3">
         <code>https://api.stashjson.com</code>
       </pre>
 
@@ -23,7 +23,7 @@ export default function DocsOverviewPage() {
         documents are readable with no key; every write and every private read
         requires a valid key.
       </p>
-      <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+      <pre className="codeblock mt-3">
         <code>{`curl https://api.stashjson.com/api/workspaces \\
   -H "X-API-Key: sk_live_your_key_here"`}</code>
       </pre>
@@ -38,7 +38,7 @@ export default function DocsOverviewPage() {
         single <code className="font-mono">detail</code> field describing what
         went wrong.
       </p>
-      <pre className="mt-3 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+      <pre className="codeblock mt-3">
         <code>{`{
   "detail": "Not authenticated"
 }`}</code>

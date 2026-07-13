@@ -17,14 +17,14 @@ export default async function DashboardLayout({
 
   return (
     <>
-      <header className="flex items-center gap-4 border-b border-border bg-panel px-6 py-3.5">
+      <header className="flex items-center gap-4 border-b border-border bg-bg px-6 py-3.5">
         <Brand href="/dashboard" />
         <span className="pill">dashboard</span>
         <nav className="ml-auto flex items-center gap-4 text-sm">
-          <Link href="/dashboard" className="text-muted hover:text-text">
+          <Link href="/dashboard" className="text-muted transition-colors hover:text-text">
             Workspaces
           </Link>
-          <Link href="/account" className="text-muted hover:text-text">
+          <Link href="/account" className="text-muted transition-colors hover:text-text">
             Account
           </Link>
           <span className="hidden text-muted sm:inline">

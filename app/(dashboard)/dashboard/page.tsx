@@ -74,16 +74,21 @@ export default function DashboardPage() {
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : workspaces.length === 0 ? (
-        <p className="text-sm text-muted">No workspaces yet.</p>
+        <p className="text-sm text-muted">
+          No workspaces yet — create your first one above.
+        </p>
       ) : (
         <div className="flex flex-col gap-2">
           {workspaces.map((ws) => (
             <div
               key={ws.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-panel-2 px-3.5 py-3"
+              className="flex items-center justify-between gap-3 row"
             >
               <div>
-                <Link href={`/workspaces/${ws.id}`} className="font-semibold">
+                <Link
+                  href={`/workspaces/${ws.id}`}
+                  className="font-semibold underline-offset-4 hover:underline"
+                >
                   {ws.name}
                 </Link>
                 <div className="font-mono text-xs text-muted">

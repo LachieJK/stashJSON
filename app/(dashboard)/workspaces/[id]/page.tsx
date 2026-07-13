@@ -19,7 +19,10 @@ export default function WorkspacePage() {
   return (
     <>
       <p>
-        <Link href="/dashboard" className="text-accent">
+        <Link
+          href="/dashboard"
+          className="text-sm text-muted transition-colors hover:text-text"
+        >
           ← All workspaces
         </Link>
       </p>
@@ -221,7 +224,9 @@ function DocumentsPanel({ id }: { id: string }) {
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : docs.length === 0 ? (
-          <p className="text-sm text-muted">No documents yet.</p>
+          <p className="text-sm text-muted">
+            No documents yet — add your first one above.
+          </p>
         ) : (
           docs.map((doc) => (
             <DocumentRow key={doc.id} doc={doc} onChanged={load} />
@@ -261,7 +266,7 @@ function DocumentRow({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-panel-2 px-3.5 py-3">
+    <div className="row">
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="font-mono text-xs">{doc.id}</span>
@@ -286,7 +291,7 @@ function DocumentRow({
 
       {open && (
         <>
-          <pre className="mt-2 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+          <pre className="codeblock mt-2">
             {JSON.stringify(doc.json_data, null, 2)}
           </pre>
           <div className="mt-2 flex gap-2">
@@ -302,10 +307,10 @@ function DocumentRow({
                 versions.map((v) => (
                   <div
                     key={v.id}
-                    className="rounded-lg border border-border bg-panel-2 px-3.5 py-3"
+                    className="row"
                   >
                     <span className="pill">v{v.version}</span>
-                    <pre className="mt-2 overflow-x-auto rounded-lg border border-border bg-bg p-3 text-xs">
+                    <pre className="codeblock mt-2">
                       {JSON.stringify(v.json_data, null, 2)}
                     </pre>
                   </div>

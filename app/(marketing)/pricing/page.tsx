@@ -6,10 +6,10 @@ export default function PricingPage() {
   return (
     <div className="mx-auto max-w-5xl px-6 py-16">
       <section className="text-center">
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+        <h1 className="text-4xl font-extrabold tracking-tighter text-balance sm:text-5xl">
           Simple, predictable pricing
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-lg text-muted">
+        <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
           Start free and upgrade when you need more workspaces, throughput, and
           history. No surprises.
         </p>
@@ -34,10 +34,10 @@ export default function PricingPage() {
 
             <div className="mt-4 flex items-baseline gap-1">
               {plan.priceMonthly === 0 ? (
-                <span className="text-3xl font-bold">Free</span>
+                <span className="text-3xl font-bold tracking-tight">Free</span>
               ) : (
                 <>
-                  <span className="text-3xl font-bold">
+                  <span className="text-3xl font-bold tracking-tight">
                     ${plan.priceMonthly}
                   </span>
                   <span className="text-sm text-muted">/mo</span>
