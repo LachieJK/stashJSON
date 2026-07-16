@@ -1,20 +1,24 @@
+import type { Metadata } from "next";
 import { Endpoint } from "../_components";
+
+export const metadata: Metadata = { title: "Documents · StashJSON docs" };
 
 export default function DocsDocumentsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
-      <p className="mt-3 text-muted">
+      <p className="mt-3 max-w-prose text-muted">
         A document stores an arbitrary JSON payload under{" "}
         <code className="font-mono">json_data</code>. Documents can be public
         (readable by anyone) or private (readable only with the owner&apos;s
-        key). Every update snapshots the previous state and increments{" "}
+        credentials), and can live inside a workspace. Every update snapshots
+        the previous state and increments{" "}
         <code className="font-mono">version</code>.
       </p>
 
-      <h2 className="mt-8 text-lg font-semibold">Document shape</h2>
-      <pre className="codeblock mt-3">
-        <code>{`{
+      <pre className="codeblock mt-4">
+        <code>{`// Document shape
+{
   "id": "V1StGXR8Z5jdHi6B",
   "json_data": { "name": "Ada", "role": "admin" },
   "is_public": false,
@@ -24,12 +28,10 @@ export default function DocsDocumentsPage() {
 }`}</code>
       </pre>
 
-      <h2 className="mt-8 text-lg font-semibold">Endpoints</h2>
-
       <Endpoint
         method="POST"
-        path="/api/documents"
-        description="Create a document. If workspace_id refers to a workspace that has a template, json_data is validated against that JSON Schema first. Returns the created document (201)."
+        path="/documents"
+        description="Create a document from arbitrary JSON, optionally inside a workspace via workspace_id. If that workspace has a template, json_data is validated against its JSON Schema first. Returns the created document with a 16-character id (201)."
         requestBody={`{
   "json_data": { "name": "Ada", "role": "admin" },
   "is_public": false,
@@ -50,8 +52,8 @@ export default function DocsDocumentsPage() {
 
       <Endpoint
         method="GET"
-        path="/api/documents/{id}"
-        description="Fetch a single document. Public documents need no API key; private documents require the owner's key."
+        path="/documents/:id"
+        description="Fetch a document. Public documents are readable by anyone; private ones require the owner's credentials."
         responseBody={`{
   "id": "V1StGXR8Z5jdHi6B",
   "json_data": { "name": "Ada", "role": "admin" },
@@ -64,8 +66,8 @@ export default function DocsDocumentsPage() {
 
       <Endpoint
         method="PUT"
-        path="/api/documents/{id}"
-        description="Full replace of json_data. The prior version is snapshotted and version is incremented. Requires authentication."
+        path="/documents/:id"
+        description="Fully replace a document's json_data. The previous content is snapshotted as a new version and the version number is incremented. Template-validated if the document is in a templated workspace. Requires authentication."
         requestBody={`{
   "json_data": { "name": "Ada Lovelace", "role": "owner" }
 }`}
@@ -81,8 +83,8 @@ export default function DocsDocumentsPage() {
 
       <Endpoint
         method="PATCH"
-        path="/api/documents/{id}"
-        description="Shallow-merge into json_data ({ ...existing, ...update }). The prior version is snapshotted and version is incremented. is_public can be updated alongside. Requires authentication."
+        path="/documents/:id"
+        description="Shallow-merge new fields into the existing JSON ({ ...existing, ...update }). Also versioned, and the merged result is template-validated. is_public can be updated alongside. Requires authentication."
         requestBody={`{
   "json_data": { "role": "admin" },
   "is_public": true
@@ -99,54 +101,8 @@ export default function DocsDocumentsPage() {
 
       <Endpoint
         method="DELETE"
-        path="/api/documents/{id}"
-        description="Delete a document and its version history. Returns 204 No Content. Requires authentication."
-      />
-
-      <h2 className="mt-8 text-lg font-semibold">Version history</h2>
-      <p className="mt-3 text-muted">
-        Each <code className="font-mono">PUT</code> or{" "}
-        <code className="font-mono">PATCH</code> records the previous document
-        state as a version snapshot.
-      </p>
-
-      <pre className="codeblock mt-3">
-        <code>{`// Version shape
-{
-  "id": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
-  "document_id": "V1StGXR8Z5jdHi6B",
-  "json_data": { "name": "Ada", "role": "admin" },
-  "version": 1,
-  "created_at": "2026-01-05T08:15:00.000Z"
-}`}</code>
-      </pre>
-
-      <Endpoint
-        method="GET"
-        path="/api/documents/{id}/versions"
-        description="List all version snapshots for a document. Public-read rules apply — public documents need no key, private ones require the owner's key."
-        responseBody={`[
-  {
-    "id": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
-    "document_id": "V1StGXR8Z5jdHi6B",
-    "json_data": { "name": "Ada", "role": "admin" },
-    "version": 1,
-    "created_at": "2026-01-05T08:15:00.000Z"
-  }
-]`}
-      />
-
-      <Endpoint
-        method="GET"
-        path="/api/documents/{id}/versions/{version}"
-        description="Fetch a single version snapshot by its version number. Public-read rules apply."
-        responseBody={`{
-  "id": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
-  "document_id": "V1StGXR8Z5jdHi6B",
-  "json_data": { "name": "Ada", "role": "admin" },
-  "version": 1,
-  "created_at": "2026-01-05T08:15:00.000Z"
-}`}
+        path="/documents/:id"
+        description="Delete a document and its entire version history. Returns 204 No Content. Requires authentication."
       />
     </div>
   );
