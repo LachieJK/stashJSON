@@ -1,14 +1,23 @@
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-// Token-backed text/border colour per HTTP verb — the sanctioned colour pops
-// on the monochrome base (see the design brief's badge exception). Shared by
-// the docs' Endpoint cards and the landing page's how-it-works steps.
+// Token-backed colour per HTTP verb — the sanctioned colour pops on the
+// monochrome base (see the design brief's badge exception). Shared by the
+// docs' Endpoint sections, the docs sidebar's verb column, and the landing
+// page's how-it-works steps.
+export const METHOD_TEXT_COLORS: Record<Method, string> = {
+  GET: "text-info",
+  POST: "text-ok",
+  PUT: "text-warn",
+  PATCH: "text-warn",
+  DELETE: "text-danger",
+};
+
 const METHOD_COLORS: Record<Method, string> = {
-  GET: "text-info border-info",
-  POST: "text-ok border-ok",
-  PUT: "text-warn border-warn",
-  PATCH: "text-warn border-warn",
-  DELETE: "text-danger border-danger",
+  GET: `${METHOD_TEXT_COLORS.GET} border-info`,
+  POST: `${METHOD_TEXT_COLORS.POST} border-ok`,
+  PUT: `${METHOD_TEXT_COLORS.PUT} border-warn`,
+  PATCH: `${METHOD_TEXT_COLORS.PATCH} border-warn`,
+  DELETE: `${METHOD_TEXT_COLORS.DELETE} border-danger`,
 };
 
 export function MethodBadge({ method }: { method: Method }) {
