@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Endpoint } from "../_components";
+import { CodeSample, Endpoint } from "../_components";
 
 export const metadata: Metadata = { title: "API keys · StashJSON docs" };
 
@@ -19,21 +19,23 @@ export default function DocsKeysPage() {
         exactly once, at creation.
       </p>
 
-      <pre className="codeblock mt-4">
-        <code>{`// Key shape (metadata only — never the raw key)
-{
+      <CodeSample
+        label="Key shape"
+        code={`{
   "id": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9012",
   "name": "CI deploys",
   "last_used_at": "2026-01-06T09:30:00.000Z",
   "created_at": "2026-01-04T12:00:00.000Z",
   "revoked_at": null
-}`}</code>
-      </pre>
+}`}
+      />
 
       <Endpoint
         method="GET"
         path="/keys"
         description="List the logged-in user's active API keys — metadata only, never the raw key."
+        auth="session"
+        parameters={[]}
         responseBody={`[
   {
     "id": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9012",
@@ -49,6 +51,17 @@ export default function DocsKeysPage() {
         method="POST"
         path="/keys"
         description="Mint a new named API key (201). The raw key is returned exactly once, in this response — store it securely; it cannot be retrieved again."
+        auth="session"
+        parameters={[
+          {
+            name: "name",
+            type: "string",
+            required: true,
+            in: "body",
+            description:
+              "A label to recognize the key by later — where it runs, not what it does. 1–100 characters.",
+          },
+        ]}
         requestBody={`{
   "name": "CI deploys"
 }`}
@@ -69,6 +82,17 @@ export default function DocsKeysPage() {
         method="DELETE"
         path="/keys/:id"
         description="Revoke an API key. Returns 204 No Content. Requests made with a revoked key stop authenticating immediately."
+        auth="session"
+        parameters={[
+          {
+            name: "id",
+            type: "string",
+            required: true,
+            in: "path",
+            description:
+              "The id of the key to revoke — the value from the key's metadata, not the key itself. A key you do not own returns 404; revoking an already-revoked key still returns 204.",
+          },
+        ]}
       />
     </div>
   );

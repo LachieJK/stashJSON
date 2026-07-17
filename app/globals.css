@@ -386,6 +386,76 @@
     animation: doc-history-2 12s infinite;
   }
 
+  /*
+   * Docs — the endpoint reference.
+   */
+
+  /* Parameter rows hang off a hairline rail, each tied to it by a tick: the
+   * same tree idiom as the docs sidebar, so a parameter list reads as a
+   * branch of its endpoint. */
+  .param-list {
+    @apply border-l border-border;
+  }
+  .param-item {
+    @apply relative py-2.5 pl-4;
+  }
+  .param-item::before {
+    content: "";
+    position: absolute;
+    top: 1.25rem;
+    left: 0;
+    width: 9px;
+    height: 1px;
+    background: var(--color-border);
+  }
+
+  /* Segmented tab strip — shared by the snippet-language switch and the error
+   * -code switch, so the two never drift apart. Active = a tonal step, per the
+   * brief: subtle inversion, never colour. 40px hit target on touch, compact
+   * on desktop. */
+  .tabs {
+    @apply inline-flex items-center gap-0.5 rounded-md border border-border p-0.5;
+  }
+  .tab {
+    @apply inline-flex min-h-10 cursor-pointer items-center rounded-[5px] px-2.5
+      font-mono text-[11px] tracking-wide text-muted uppercase transition-colors
+      hover:text-text md:min-h-7;
+  }
+
+  /*
+   * The active tab — two mechanisms, one look:
+   *
+   *   aria-selected  — the error tabs, driven by React state. One section, one
+   *                    panel; the state is local and nothing needs it early.
+   *   :root[data-lang] — the snippet language, which is an attribute on <html>
+   *                    (set pre-paint by the docs layout's inline script, then
+   *                    by LangProvider). CSS, not React, decides which of the
+   *                    three snippets each endpoint shows, which makes that
+   *                    switch global (one attribute, every endpoint on the
+   *                    page), correct on first paint, and free at hydration.
+   *                    No attribute means JavaScript.
+   *
+   * Only the ACTIVE state is selected for; there are no "inactive" overrides,
+   * so nothing outranks .tab:hover.
+   */
+  .tab[aria-selected="true"],
+  :root:not([data-lang]) .tab[data-lang="javascript"],
+  :root[data-lang="javascript"] .tab[data-lang="javascript"],
+  :root[data-lang="python"] .tab[data-lang="python"],
+  :root[data-lang="java"] .tab[data-lang="java"] {
+    @apply bg-panel-2 text-text;
+  }
+
+  .snippet {
+    display: none;
+  }
+  :root:not([data-lang]) .snippet[data-lang="javascript"],
+  :root[data-lang="javascript"] .snippet[data-lang="javascript"],
+  :root[data-lang="python"] .snippet[data-lang="python"],
+  :root[data-lang="java"] .snippet[data-lang="java"] {
+    display: block;
+  }
+
   /* Icon swap is pure CSS keyed off the same conditions as the palette above,
    * so it can never disagree with the active theme (and needs no JS to render
    * the right icon on first paint). Dark shows the sun (click → light);

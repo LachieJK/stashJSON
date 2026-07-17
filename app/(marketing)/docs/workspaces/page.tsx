@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Endpoint } from "../_components";
+import { CodeSample, Endpoint } from "../_components";
 
 export const metadata: Metadata = { title: "Workspaces · StashJSON docs" };
 
@@ -14,22 +14,32 @@ export default function DocsWorkspacesPage() {
         require authentication.
       </p>
 
-      <pre className="codeblock mt-4">
-        <code>{`// Workspace shape
-{
+      <CodeSample
+        label="Workspace shape"
+        code={`{
   "id": "b1f0c2a4-1e2d-4c3b-9a8f-0d1e2f3a4b5c",
   "name": "Production configs",
   "created_at": "2026-01-04T12:00:00.000Z",
   "updated_at": "2026-01-04T12:00:00.000Z",
   "document_count": 12,
   "has_template": true
-}`}</code>
-      </pre>
+}`}
+      />
 
       <Endpoint
         method="POST"
         path="/workspaces"
         description="Create a workspace — a named container for documents. name must be 1–255 characters. Returns the created workspace (201)."
+        parameters={[
+          {
+            name: "name",
+            type: "string",
+            required: true,
+            in: "body",
+            description:
+              "A display name for the workspace. 1–255 characters; names need not be unique.",
+          },
+        ]}
         requestBody={`{
   "name": "Production configs"
 }`}
@@ -47,6 +57,7 @@ export default function DocsWorkspacesPage() {
         method="GET"
         path="/workspaces"
         description="List all workspaces owned by the caller."
+        parameters={[]}
         responseBody={`[
   {
     "id": "b1f0c2a4-1e2d-4c3b-9a8f-0d1e2f3a4b5c",
@@ -63,6 +74,16 @@ export default function DocsWorkspacesPage() {
         method="GET"
         path="/workspaces/:id"
         description="Fetch a single workspace owned by the caller."
+        parameters={[
+          {
+            name: "id",
+            type: "string",
+            required: true,
+            in: "path",
+            description:
+              "The workspace's id. A workspace you do not own returns 404.",
+          },
+        ]}
         responseBody={`{
   "id": "b1f0c2a4-1e2d-4c3b-9a8f-0d1e2f3a4b5c",
   "name": "Production configs",
@@ -77,6 +98,24 @@ export default function DocsWorkspacesPage() {
         method="GET"
         path="/workspaces/:id/documents"
         description="List all documents inside a workspace. Cursor-paginated, newest first, up to 25 per page — pass ?after=<documentId> to fetch the next page."
+        parameters={[
+          {
+            name: "id",
+            type: "string",
+            required: true,
+            in: "path",
+            description:
+              "The workspace's id. A workspace you do not own returns 404.",
+          },
+          {
+            name: "after",
+            type: "string",
+            required: false,
+            in: "query",
+            description:
+              "The id of the last document on the previous page. Returns the 25 documents created before it; omit it for the first page. An id that is not in this workspace returns 404.",
+          },
+        ]}
         responseBody={`// GET /workspaces/:id/documents?after=V1StGXR8Z5jdHi6B
 [
   {
@@ -94,6 +133,24 @@ export default function DocsWorkspacesPage() {
         method="PUT"
         path="/workspaces/:id"
         description="Rename/update a workspace. name must be 1–255 characters."
+        parameters={[
+          {
+            name: "id",
+            type: "string",
+            required: true,
+            in: "path",
+            description:
+              "The workspace's id. A workspace you do not own returns 404.",
+          },
+          {
+            name: "name",
+            type: "string",
+            required: true,
+            in: "body",
+            description:
+              "The workspace's new display name. 1–255 characters. This is the only field a workspace exposes for editing.",
+          },
+        ]}
         requestBody={`{
   "name": "Staging configs"
 }`}
@@ -111,6 +168,16 @@ export default function DocsWorkspacesPage() {
         method="DELETE"
         path="/workspaces/:id"
         description="Delete a workspace. Returns 204 No Content. Its documents are NOT deleted — they are detached, each document's workspace_id set to null."
+        parameters={[
+          {
+            name: "id",
+            type: "string",
+            required: true,
+            in: "path",
+            description:
+              "The workspace's id. A workspace you do not own returns 404. Its template is deleted with it; its documents are not.",
+          },
+        ]}
       />
     </div>
   );

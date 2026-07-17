@@ -37,7 +37,7 @@ export const DOC_GROUPS: DocGroup[] = [
     ],
   },
   {
-    label: "Version history",
+    label: "Version History",
     href: "/docs/versions",
     items: [
       { method: "GET", path: "/documents/:id/versions", title: "List versions" },
@@ -65,7 +65,7 @@ export const DOC_GROUPS: DocGroup[] = [
     ],
   },
   {
-    label: "Workspace templates",
+    label: "Workspace Templates",
     href: "/docs/templates",
     items: [
       {
@@ -86,7 +86,7 @@ export const DOC_GROUPS: DocGroup[] = [
     ],
   },
   {
-    label: "API keys",
+    label: "API Keys",
     href: "/docs/keys",
     items: [
       { method: "GET", path: "/keys", title: "List API keys" },
@@ -95,7 +95,7 @@ export const DOC_GROUPS: DocGroup[] = [
     ],
   },
   {
-    label: "Misc",
+    label: "Other",
     href: "/docs/misc",
     items: [{ method: "GET", path: "/health", title: "Health check" }],
   },
