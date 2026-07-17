@@ -15,6 +15,8 @@ export default function DocsMiscPage() {
         method="GET"
         path="/health"
         description="Health check. Requires no authentication — use it for uptime monitors and load-balancer probes."
+        auth="none"
+        parameters={[]}
         responseBody={`{
   "status": "ok"
 }`}
