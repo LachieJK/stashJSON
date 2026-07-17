@@ -456,6 +456,88 @@
     display: block;
   }
 
+  /*
+   * Auth — the full-viewport split.
+   */
+
+  /* The quiet way out, paired with the wordmark at the top of the form column.
+   * A real link (never history.back(), which from an emailed /login lands
+   * somewhere useless), so the label can name its destination. The arrow
+   * nudges toward the page edge on hover; the global reduced-motion guard
+   * collapses that to nothing. min-h-10 keeps the touch target honest. */
+  .auth-back {
+    @apply inline-flex min-h-10 items-center gap-1.5 text-sm text-muted
+      transition-colors hover:text-text;
+  }
+  .auth-back svg {
+    transition: transform 150ms ease;
+  }
+  .auth-back:hover svg {
+    transform: translateX(-2px);
+  }
+
+  /*
+   * The ledger — the auth split's texture panel. A version history hung off a
+   * hairline rail: the product's thesis stated as structure, not marketing.
+   * A light streak sweeps the rail and each superseded row lifts to full
+   * contrast as it passes — a write travelling down the history.
+   *
+   * Every animation's BASE style is its resting frame, so the reduced-motion
+   * guard leaves a static, complete ledger: current version lit, superseded
+   * versions muted.
+   */
+  .ledger-rail {
+    @apply relative border-l border-border;
+  }
+
+  /* A row tied to the rail by a tick — the same idiom as .param-item. */
+  .ledger-row {
+    @apply relative flex items-center gap-3 py-3 pl-4 text-muted;
+  }
+  .ledger-row::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 9px;
+    height: 1px;
+    background: var(--color-border);
+  }
+
+  /* Superseded rows only: a brief lift to full contrast as the streak passes,
+   * scheduled by --row-delay at the call site. */
+  .ledger-row-flash {
+    animation: ledger-lit 6s ease-in-out infinite;
+    animation-delay: var(--row-delay, 0s);
+  }
+
+  /* The streak: travels the rail over the first half of the cycle, then waits
+   * out of frame. Clipped to the rail's height by the container. */
+  .ledger-sweep {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .ledger-sweep::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 1px;
+    height: 72px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      var(--color-text),
+      transparent
+    );
+    animation: ledger-sweep 6s linear infinite;
+  }
+
   /* Icon swap is pure CSS keyed off the same conditions as the palette above,
    * so it can never disagree with the active theme (and needs no JS to render
    * the right icon on first paint). Dark shows the sun (click → light);
@@ -511,6 +593,34 @@
   }
   100% {
     opacity: 1;
+  }
+}
+
+/* The ledger streak: down the rail over the first half of the cycle, then
+ * parked below it (clipped) for the second half — the pause between writes.
+ * `top` rather than transform: the element is 1px wide, and animating `top`
+ * is what lets the end position be the rail's own height (100%). */
+@keyframes ledger-sweep {
+  0% {
+    top: -72px;
+  }
+  50%,
+  100% {
+    top: 100%;
+  }
+}
+
+/* A row's moment as the streak reaches it: lit, then back to muted, where it
+ * stays for the rest of the cycle. The delays at the call site are spaced to
+ * follow the streak down the rail. */
+@keyframes ledger-lit {
+  0%,
+  8% {
+    color: var(--color-text);
+  }
+  20%,
+  100% {
+    color: var(--color-muted);
   }
 }
 
