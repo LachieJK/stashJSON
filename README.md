@@ -54,7 +54,6 @@ StashJSON is built for **developers, small teams, and makers** who need to persi
 ## Learn more
 
 - **Technical & architecture details:** see [`CLAUDE.md`](./CLAUDE.md) for how the app is built, the data model, and the internals.
-- **Legacy implementation:** the original FastAPI/Python version is preserved for reference under [`legacy/`](./legacy).
 
 ---
 
