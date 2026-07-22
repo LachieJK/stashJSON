@@ -27,6 +27,9 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 
+# Agent worktrees (scratch checkouts; never part of a commit)
+.claude/worktrees/
+
 # IDEs
 .vscode/
 .idea/
