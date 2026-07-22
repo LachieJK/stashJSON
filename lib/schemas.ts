@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Request-body schemas. Field names stay snake_case to match the existing public
-// API contract (and the legacy Pydantic models in legacy/app/schemas.py).
+// API contract.
 
 const jsonObject = z.record(z.string(), z.unknown());
 

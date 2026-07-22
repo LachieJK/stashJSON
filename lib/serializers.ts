@@ -7,8 +7,7 @@ import type {
   WorkspaceTemplate,
 } from "@/prisma/generated/client";
 
-// Map Prisma rows (camelCase) to the snake_case JSON the public API returns,
-// preserving parity with the legacy FastAPI responses.
+// Map Prisma rows (camelCase) to the snake_case JSON the public API returns.
 
 export function userResponse(user: User) {
   return {

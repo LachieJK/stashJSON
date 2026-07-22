@@ -1,8 +1,7 @@
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 
-// JSON Schema (Draft-07) validation, replacing legacy/app/template_validator.py
-// (Python's jsonschema). Ajv's default meta-schema is Draft-07.
+// JSON Schema (Draft-07) validation. Ajv's default meta-schema is Draft-07.
 //
 // A *fresh* Ajv instance is used per call on purpose: a shared instance caches
 // compiled schemas by `$id`, so re-validating a stored template that declares

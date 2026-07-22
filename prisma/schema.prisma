@@ -1,6 +1,5 @@
 // StashJSON data model.
-// Ported from the legacy SQLAlchemy models in legacy/app/database.py.
-// Key change: JSON is stored natively as `Json` (JSONB) instead of serialized Text.
+// JSON is stored natively as `Json` (JSONB) rather than serialized Text.
 
 generator client {
   provider = "prisma-client"

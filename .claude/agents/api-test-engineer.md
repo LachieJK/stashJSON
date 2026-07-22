@@ -3,8 +3,7 @@ name: api-test-engineer
 description: >-
   Owns automated testing and lint health for the StashJSON API — creates,
   maintains, and runs unit/integration tests plus lint and typecheck for the
-  Next.js route handlers, the lib/ logic, and Prisma. Supersedes the legacy
-  static test_api.py. Use when API or lib code changes and needs coverage, when
+  Next.js route handlers, the lib/ logic, and Prisma. Use when API or lib code changes and needs coverage, when
   the suite / lint / typecheck should be run, or when a bug needs a regression
   test. Examples: "add tests for the new endpoint", "run the API tests",
   "make lint and typecheck pass", "cover the version-history logic".
@@ -71,9 +70,7 @@ Add a **regression test** for every bug you're asked to lock down.
    test ordering, no sleeps.
 3. Run `npm run test`, `npm run lint`, and `npm run typecheck`. **Do not report
    done until all three pass** (or you've clearly explained an unavoidable failure).
-4. When you add coverage that supersedes part of `test_api.py`, note it; once the
-   suite covers a flow, recommend removing the corresponding legacy script.
-5. Keep tests green as the API evolves — when a route's behavior legitimately
+4. Keep tests green as the API evolves — when a route's behavior legitimately
    changes, update the test to match the new contract rather than deleting it.
 
 ## Reporting back
