@@ -31,4 +31,9 @@ jobs:
         # `gh pr merge --auto` errors with "Pull request is in clean status" if
         # it runs before the required check has registered on the PR. That is
         # benign and self-heals on the next `synchronize`, so don't fail the run.
-        run: gh pr merge --auto --squash "$PR_URL" || true
+        #
+        # `--delete-branch` is required even though the repository has
+        # "Automatically delete head branches" enabled: the preference recorded
+        # on the auto-merge request wins over the repository default, so without
+        # it every auto-merged branch survives the merge.
+        run: gh pr merge --auto --squash --delete-branch "$PR_URL" || true
