@@ -19,7 +19,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "sandcastle": "npx tsx .sandcastle/main.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
@@ -34,6 +35,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@ai-hero/sandcastle": "^0.12.0",
     "@tailwindcss/postcss": "^4.3.2",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.4",
