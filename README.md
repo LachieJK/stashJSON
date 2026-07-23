@@ -4,8 +4,6 @@ A lightweight service for storing, versioning, and organizing JSON documents beh
 
 Built with **Next.js (App Router) + TypeScript**, **Prisma**, and **PostgreSQL**. The public API lives under `/api/*`; the dashboard is the rest of the app.
 
-> Migrated from an earlier FastAPI/Python implementation, preserved under [`legacy/`](./legacy) for reference.
-
 ## Quick start
 
 ### 1. Install dependencies
@@ -101,7 +99,6 @@ app/
   workspaces/[id]/  # workspace detail (documents, template, versions)
 lib/                # server logic: db, auth, schemas, serializers, validators
 prisma/schema.prisma
-legacy/             # original FastAPI implementation (reference only)
 ```
 
 See [`CLAUDE.md`](./CLAUDE.md) for architecture details.

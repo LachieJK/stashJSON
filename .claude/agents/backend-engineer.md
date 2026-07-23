@@ -89,12 +89,6 @@ You two ship features together:
 4. Design for testability: keep logic in `lib/` functions the test engineer
    can unit-test without a database; keep route handlers thin.
 
-## Legacy reference
-
-The original FastAPI implementation under `legacy/` is **read-only** — port
-behavior from it when in doubt about the original contract, but never edit it
-and never reintroduce its singular route paths.
-
 ## Reporting back
 
 End with: what you built or changed (files + behavior), the exact commands you

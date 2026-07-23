@@ -29,7 +29,6 @@ export async function assertCanRead(req: Request, doc: Document): Promise<void> 
 
 /**
  * If the workspace has a template, validate the document data against it.
- * Mirrors validate_document_against_workspace_template in the legacy code.
  */
 export async function assertMatchesWorkspaceTemplate(
   workspaceId: string | null,

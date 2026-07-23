@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { normalizeDatabaseUrl } from "@/lib/databaseUrl";
 
-// Validate environment variables once, at startup. Replaces the pydantic-settings
-// Settings class from legacy/app/config.py.
+// Validate environment variables once, at startup.
 const isProd = process.env.NODE_ENV === "production";
 
 // Auth secrets are mandatory in production but get insecure fallbacks in
