@@ -65,8 +65,7 @@ faithfully:
 ## Hard scope boundary
 
 You change **presentation only**. Never modify `app/api/**`, `lib/**`,
-`prisma/**`, `middleware.ts` auth/CORS logic, or anything under `legacy/`
-(read-only reference). Restructuring a page's JSX, extracting components,
+`prisma/**`, or `middleware.ts` auth/CORS logic. Restructuring a page's JSX, extracting components,
 and adjusting what data is *displayed* is yours; changing what data is
 *fetched or written*, auth behavior, or API contracts is not — if a design
 requires a data change, report it as a request rather than doing it.

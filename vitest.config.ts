@@ -14,11 +14,11 @@ export default defineConfig({
     environment: "node",
     globals: true,
     include: ["tests/**/*.test.ts"],
-    exclude: ["legacy/**", "node_modules/**", ".next/**"],
+    exclude: ["node_modules/**", ".next/**"],
     coverage: {
       provider: "v8",
       include: ["lib/**/*.ts"],
-      exclude: ["legacy/**", "node_modules/**", ".next/**", "tests/**"],
+      exclude: ["node_modules/**", ".next/**", "tests/**"],
     },
   },
 });

@@ -27,7 +27,6 @@ export async function resolveUser(
 
 /**
  * Require a valid API key from the `X-API-Key` header and return the user.
- * Replaces the `verify_api_key` FastAPI dependency (legacy/app/auth.py).
  */
 export async function requireApiKey(req: Request): Promise<User> {
   const apiKey = req.headers.get("x-api-key");

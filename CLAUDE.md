@@ -8,8 +8,6 @@ StashJSON is a JSON-document storage service: developers authenticate with an AP
 
 It is a **Next.js (App Router) + TypeScript** app — one repo containing both the public REST API (`app/api/**`) and a **Tailwind**-styled web app. Data is in **PostgreSQL** via **Prisma**. The UI is split into route groups: `app/(marketing)/**` (public landing, `/pricing`, `/docs`), `app/(auth)/**` (`/login`, `/signup`), and `app/(dashboard)/**` (session-guarded `/dashboard`, `/workspaces/[id]`, `/account`).
 
-> The original **FastAPI + SQLAlchemy** implementation was migrated to this stack. It is preserved read-only under `legacy/` for reference — do not edit it; port behavior from it.
-
 ## Commands
 
 ```bash
@@ -60,10 +58,10 @@ Everything server-side lives in `lib/` and is consumed by thin route handlers in
 
 ### Routing notes
 
-- Routes are **plural REST** (`/api/documents`, `/api/workspaces`) — the legacy app used singular paths; don't reintroduce those.
+- Routes are **plural REST** (`/api/documents`, `/api/workspaces`) — never singular; don't reintroduce singular paths.
 - `middleware.ts` applies permissive CORS to `/api/*` only.
 - Next 15 route context params are async: `const { id } = await ctx.params`.
 
 ## Verifying changes
 
-`npm run build` is the fast correctness gate (compile + typecheck + route-signature validation). For runtime behavior you need a database: migrate, `npm run dev`, then exercise the flow (generate key → create workspace → create document → view versions) via the dashboard or curl. `legacy/test_api.py` is a reusable black-box checker if pointed at `http://localhost:3000` with the plural paths.
+`npm run build` is the fast correctness gate (compile + typecheck + route-signature validation), and `npm run test` runs the Vitest suite over `lib/` and the route handlers. For runtime behavior you need a database: migrate, `npm run dev`, then exercise the flow (generate key → create workspace → create document → view versions) via the dashboard or curl.
