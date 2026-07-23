@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
 import { ApiError, handle, parseBody } from "@/lib/http";
 import { documentUpdateSchema } from "@/lib/schemas";
 import { documentResponse } from "@/lib/serializers";
 import {
   assertCanRead,
-  assertMatchesWorkspaceTemplate,
   loadOwnedDocument,
+  updateDocument,
 } from "@/lib/documents";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -29,39 +28,12 @@ export async function PUT(req: Request, ctx: Ctx) {
     const { id } = await ctx.params;
     const { doc } = await loadOwnedDocument(req, id);
     const body = await parseBody(req, documentUpdateSchema);
-
-    if (body.json_data != null) {
-      await assertMatchesWorkspaceTemplate(doc.workspaceId, body.json_data);
-      const updated = await prisma.$transaction(async (tx) => {
-        // Snapshot the current version before overwriting.
-        await tx.documentVersion.create({
-          data: {
-            documentId: doc.id,
-            jsonData: doc.jsonData as Prisma.InputJsonValue,
-            version: doc.version,
-          },
-        });
-        return tx.document.update({
-          where: { id: doc.id },
-          data: {
-            jsonData: body.json_data as Prisma.InputJsonValue,
-            version: { increment: 1 },
-            ...(body.is_public != null ? { isPublic: body.is_public } : {}),
-          },
-        });
-      });
-      return NextResponse.json(documentResponse(updated));
-    }
-
-    if (body.is_public != null) {
-      const updated = await prisma.document.update({
-        where: { id: doc.id },
-        data: { isPublic: body.is_public },
-      });
-      return NextResponse.json(documentResponse(updated));
-    }
-
-    return NextResponse.json(documentResponse(doc));
+    const updated = await updateDocument(doc, {
+      mode: "replace",
+      data: body.json_data,
+      isPublic: body.is_public,
+    });
+    return NextResponse.json(documentResponse(updated));
   });
 }
 
@@ -71,41 +43,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const { id } = await ctx.params;
     const { doc } = await loadOwnedDocument(req, id);
     const body = await parseBody(req, documentUpdateSchema);
-
-    if (body.json_data != null) {
-      const existing = (doc.jsonData ?? {}) as Record<string, unknown>;
-      const merged = { ...existing, ...body.json_data };
-      await assertMatchesWorkspaceTemplate(doc.workspaceId, merged);
-
-      const updated = await prisma.$transaction(async (tx) => {
-        await tx.documentVersion.create({
-          data: {
-            documentId: doc.id,
-            jsonData: doc.jsonData as Prisma.InputJsonValue,
-            version: doc.version,
-          },
-        });
-        return tx.document.update({
-          where: { id: doc.id },
-          data: {
-            jsonData: merged as Prisma.InputJsonValue,
-            version: { increment: 1 },
-            ...(body.is_public != null ? { isPublic: body.is_public } : {}),
-          },
-        });
-      });
-      return NextResponse.json(documentResponse(updated));
-    }
-
-    if (body.is_public != null) {
-      const updated = await prisma.document.update({
-        where: { id: doc.id },
-        data: { isPublic: body.is_public },
-      });
-      return NextResponse.json(documentResponse(updated));
-    }
-
-    return NextResponse.json(documentResponse(doc));
+    const updated = await updateDocument(doc, {
+      mode: "merge",
+      data: body.json_data,
+      isPublic: body.is_public,
+    });
+    return NextResponse.json(documentResponse(updated));
   });
 }
 
