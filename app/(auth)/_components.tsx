@@ -71,15 +71,14 @@ export function AuthHeader({
   return (
     <>
       {/* A full viewport earns a decisive heading (brief: headings are heavy
-       * and tight) — the old card's text-lg would float here. */}
+       * and tight). */}
       <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
       <p className="mt-2 text-sm text-muted">{subtitle}</p>
     </>
   );
 }
 
-// A labelled input. Height is left to the global .input on purpose — raising
-// the control floor to a 40px touch target is a separate, product-wide pass.
+// A labelled input. Height is left to the global .input on purpose, not overridden here.
 export function Field({
   id,
   label,

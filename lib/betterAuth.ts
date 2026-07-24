@@ -15,7 +15,6 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   emailAndPassword: {
     enabled: true,
-    // Email verification is a future addition; let users in immediately for now.
     requireEmailVerification: false,
   },
   // Lets Better Auth set cookies from Next.js server actions / route handlers.

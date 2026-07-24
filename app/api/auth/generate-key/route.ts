@@ -5,11 +5,11 @@ import { handle, parseBody } from "@/lib/http";
 import { apiKeyCreateSchema } from "@/lib/schemas";
 import { issueApiKey, KEY_REVEAL_MESSAGE } from "@/lib/apiKeys";
 
-// POST /api/auth/generate-key — legacy, keyless onboarding: create an anonymous
-// account plus one API key and return the raw key once. Kept for backward
-// compatibility with existing API consumers; new users should sign up and manage
-// keys from the account page instead. Email is now the web-login identifier, so
-// we assign a synthetic unique email here rather than trusting the body value.
+// POST /api/auth/generate-key — legacy keyless onboarding: create an anonymous
+// account plus one API key and return the raw key once. New users should sign up
+// and manage keys from the account page instead. Email is the web-login
+// identifier, so this assigns a synthetic unique email rather than trusting the
+// body value.
 export async function POST(req: Request) {
   return handle(async () => {
     await parseBody(req, apiKeyCreateSchema);

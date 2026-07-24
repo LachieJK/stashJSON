@@ -6,8 +6,7 @@ import { getServerSession, getSessionFromHeaders } from "@/lib/betterAuth";
 
 /**
  * Resolve a user from a raw API key, or null if absent/unknown/revoked.
- * Keys now live in the `ApiKey` table (many per user); we bump `lastUsedAt`
- * best-effort so revocation and usage tracking work.
+ * Bumps `lastUsedAt` best-effort so revocation and usage tracking work.
  */
 export async function resolveUser(
   apiKey: string | null | undefined,

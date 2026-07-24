@@ -990,7 +990,7 @@ describe.skipIf(!enabled)("API edge cases (DB-backed)", () => {
       });
       expect(keyRow).not.toBeNull();
       createdUserIds.push(keyRow!.userId);
-      // Email is a web-login identifier now; the body value must not be trusted.
+      // Email is a web-login identifier; the body value must not be trusted.
       expect(keyRow!.user.email).not.toBe("spoofed@evil.example");
       expect(keyRow!.user.email).toMatch(/^apikey_.+@stashjson\.local$/);
       // Only the hash is stored, never the raw key.

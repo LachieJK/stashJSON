@@ -1,14 +1,11 @@
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 
-// JSON Schema (Draft-07) validation. Ajv's default meta-schema is Draft-07.
-//
-// A *fresh* Ajv instance is used per call on purpose: a shared instance caches
-// compiled schemas by `$id`, so re-validating a stored template that declares
-// `$id` (which arrives as a fresh object on every DB read) would throw
-// `schema with key or id "..." already exists` — rejecting every document after
-// the first, and 400-ing repeat template uploads. See the regression tests in
-// tests/unit/templateValidator.test.ts.
+// JSON Schema (Draft-07) validation, via a *fresh* Ajv instance per call.
+// A shared instance caches compiled schemas by `$id`; re-validating a stored
+// template that declares `$id` (a fresh object on every DB read) would throw
+// `schema with key or id "..." already exists`, rejecting every document after
+// the first. See tests/unit/templateValidator.test.ts.
 function createAjv(): Ajv {
   const ajv = new Ajv({ allErrors: true, strict: false });
   addFormats(ajv);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 
-/** An error carrying an HTTP status, analogous to FastAPI's HTTPException. */
+/** An error carrying an HTTP status. */
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -17,7 +17,7 @@ function formatZodError(err: ZodError): string {
   return `Validation error at ${path}: ${first?.message ?? "invalid input"}`;
 }
 
-/** Error responses mirror FastAPI's `{ "detail": ... }` shape. */
+/** Error responses use the `{ detail }` shape. */
 export function errorResponse(status: number, detail: string) {
   return NextResponse.json({ detail }, { status });
 }

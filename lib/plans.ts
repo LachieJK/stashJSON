@@ -1,7 +1,4 @@
-// Static plan catalog for the marketing pricing page.
-//
-// This is intentionally inert: no Stripe imports, no env access, no network.
-// It's a plain typed catalog the pricing page maps over.
+// Static, intentionally inert plan catalog for the pricing page — no Stripe, env, or network.
 
 export type PlanTierId = "free" | "pro" | "team";
 
@@ -16,17 +13,7 @@ export type Plan = {
   featured?: boolean;
   ctaLabel: string;
 
-  // ── BILLING STAGE SEAM (next stage plugs in HERE) ─────────────────────────
-  // When Stripe is wired up, populate this with the Stripe Price ID for the
-  // plan's recurring subscription (e.g. "price_1QabcXYZ..."). It's left
-  // `undefined` for now so nothing imports Stripe or reads env at this stage.
-  //
-  // Consumers to be built next:
-  //   • POST /api/billing/checkout — looks up PLANS by `id`, reads
-  //     `stripePriceId`, and creates a Stripe Checkout Session for it.
-  //   • The Stripe webhook handler — maps a completed session's price back to
-  //     a `PlanTierId` to provision/downgrade the user's account.
-  // Keep this field the single source of truth for that mapping.
+  /** Stripe Price ID for the plan's recurring subscription; unset until billing is wired. */
   stripePriceId?: string;
 };
 
@@ -45,7 +32,6 @@ export const PLANS: Plan[] = [
       "1 API key",
       "Community support",
     ],
-    // stripePriceId: undefined — free tier needs no Stripe price.
   },
   {
     id: "pro",
@@ -62,7 +48,6 @@ export const PLANS: Plan[] = [
       "10 API keys",
       "Email support",
     ],
-    // stripePriceId: undefined — set to the Pro monthly Stripe Price ID.
   },
   {
     id: "team",
@@ -78,6 +63,5 @@ export const PLANS: Plan[] = [
       "Unlimited API keys",
       "Priority support & SLA",
     ],
-    // stripePriceId: undefined — set to the Team monthly Stripe Price ID.
   },
 ];
