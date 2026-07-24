@@ -66,8 +66,8 @@ export function DocsSidebar() {
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         if (visible.length > 0) setActiveId(visible[0].target.id);
       },
-      // Band from just under the floating navbar to a third down the screen.
-      { rootMargin: "-90px 0px -66% 0px" },
+      // Band from just under the navbar to a third down the screen.
+      { rootMargin: "-70px 0px -66% 0px" },
     );
     headings.forEach((h) => observer.observe(h));
     return () => observer.disconnect();
@@ -75,7 +75,7 @@ export function DocsSidebar() {
 
   return (
     <nav aria-label="API reference" className="md:w-60 md:shrink-0">
-      <div className="md:sticky md:top-24 md:max-h-[calc(100vh-7.5rem)] md:overflow-y-auto md:pb-4">
+      <div className="md:sticky md:top-20 md:max-h-[calc(100vh-6.5rem)] md:overflow-y-auto md:pb-4">
         <p className="eyebrow mb-2">API reference</p>
 
         <Link
