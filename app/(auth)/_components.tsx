@@ -78,7 +78,7 @@ export function AuthHeader({
   );
 }
 
-// A labelled input. Height is left to the global .input on purpose, not overridden here.
+// A labelled input. Height is left to the global .input on purpose.
 export function Field({
   id,
   label,
