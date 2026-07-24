@@ -4,8 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * DB-backed edge-case / contract tests for the public API, complementing the
  * happy-path lifecycle coverage in routes.test.ts. Covers the authorization
  * matrix (401/403/404), the exact `{ detail }` error shape, the snake_case wire
- * contract, versioning corner cases, template-enforcement atomicity, pagination,
- * and the legacy generate-key/revoke-key endpoints.
+ * contract, versioning corner cases, template-enforcement atomicity, and
+ * pagination.
  *
  * SAFETY: identical guard to routes.test.ts — these tests only run when
  * TEST_DATABASE_URL points at a throwaway, non-Neon Postgres. The `.env`
@@ -55,21 +55,17 @@ describe.skipIf(!enabled)("API edge cases (DB-backed)", () => {
   const createdUserIds: string[] = [];
 
   async function newUserKey(): Promise<string> {
-    const { POST } = await import("@/app/api/auth/generate-key/route");
-    const res = await POST(
-      new Request("http://test/api/auth/generate-key", {
-        method: "POST",
-        headers: jsonHeaders(),
-        body: JSON.stringify({}),
-      }),
-    );
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { api_key: string };
-    const key = await prisma.apiKey.findUnique({
-      where: { keyHash: (await import("@/lib/utils")).hashApiKey(body.api_key) },
+    const { randomUUID } = await import("node:crypto");
+    const { issueApiKey } = await import("@/lib/apiKeys");
+    const user = await prisma.user.create({
+      data: {
+        name: "API key user",
+        email: `apikey_${randomUUID()}@stashjson.local`,
+      },
     });
-    if (key) createdUserIds.push(key.userId);
-    return body.api_key;
+    createdUserIds.push(user.id);
+    const { raw } = await issueApiKey(user.id, "Default key");
+    return raw;
   }
 
   async function createDoc(
@@ -966,81 +962,6 @@ describe.skipIf(!enabled)("API edge cases (DB-backed)", () => {
         expect(docs2.map((d) => d.id)).toContain(docs1[1].id);
       },
     );
-  });
-
-  describe("legacy generate-key / revoke-key endpoints", () => {
-    it("mints a well-formed key and ignores any supplied email", async () => {
-      const { POST } = await import("@/app/api/auth/generate-key/route");
-      const res = await POST(
-        new Request("http://test/api/auth/generate-key", {
-          method: "POST",
-          headers: jsonHeaders(),
-          body: JSON.stringify({ email: "spoofed@evil.example" }),
-        }),
-      );
-      expect(res.status).toBe(201);
-      const body = (await res.json()) as { api_key: string; message: string };
-      expect(body.api_key).toMatch(/^[A-Za-z0-9_-]{32}$/);
-      expect(typeof body.message).toBe("string");
-
-      const { hashApiKey } = await import("@/lib/utils");
-      const keyRow = await prisma.apiKey.findUnique({
-        where: { keyHash: hashApiKey(body.api_key) },
-        include: { user: true },
-      });
-      expect(keyRow).not.toBeNull();
-      createdUserIds.push(keyRow!.userId);
-      // Email is a web-login identifier; the body value must not be trusted.
-      expect(keyRow!.user.email).not.toBe("spoofed@evil.example");
-      expect(keyRow!.user.email).toMatch(/^apikey_.+@stashjson\.local$/);
-      // Only the hash is stored, never the raw key.
-      expect(keyRow!.keyHash).not.toBe(body.api_key);
-    });
-
-    it("rejects a body with a non-string email", async () => {
-      const { POST } = await import("@/app/api/auth/generate-key/route");
-      const res = await POST(
-        new Request("http://test/api/auth/generate-key", {
-          method: "POST",
-          headers: jsonHeaders(),
-          body: JSON.stringify({ email: 123 }),
-        }),
-      );
-      expect(res.status).toBe(400);
-    });
-
-    it("revoke-key deletes the account and cascades all data", async () => {
-      const key = await newUserKey();
-      const wsId = await createWorkspace(key, "Doomed with user");
-      const doc = await createDoc(key, { json_data: { bye: 1 }, workspace_id: wsId });
-
-      const { DELETE } = await import("@/app/api/auth/revoke-key/route");
-      const noKey = await DELETE(
-        new Request("http://test/api/auth/revoke-key", {
-          method: "DELETE",
-          headers: jsonHeaders(),
-        }),
-      );
-      expect(noKey.status).toBe(401);
-
-      const res = await DELETE(
-        new Request("http://test/api/auth/revoke-key", {
-          method: "DELETE",
-          headers: jsonHeaders(key),
-        }),
-      );
-      expect(res.status).toBe(204);
-
-      // Everything is gone: document, workspace, and the key itself.
-      expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
-      expect(await prisma.workspace.findUnique({ where: { id: wsId } })).toBeNull();
-
-      const { GET } = await import("@/app/api/workspaces/route");
-      const blocked = await GET(
-        new Request("http://test/api/workspaces", { headers: jsonHeaders(key) }),
-      );
-      expect(blocked.status).toBe(401);
-    });
   });
 
   describe("key management is session-only", () => {

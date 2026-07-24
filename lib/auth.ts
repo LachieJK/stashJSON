@@ -24,17 +24,6 @@ export async function resolveUser(
   return key.user;
 }
 
-/**
- * Require a valid API key from the `X-API-Key` header and return the user.
- */
-export async function requireApiKey(req: Request): Promise<User> {
-  const apiKey = req.headers.get("x-api-key");
-  if (!apiKey) throw new ApiError(401, "API key is required");
-  const user = await resolveUser(apiKey);
-  if (!user) throw new ApiError(401, "Invalid API key");
-  return user;
-}
-
 /** Resolve the user from a Better Auth session, given the session object. */
 async function userFromSession(
   session: { user?: { id: string } } | null,

@@ -52,20 +52,17 @@ describe.skipIf(!enabled)("route handlers (DB-backed)", () => {
   const createdUserIds: string[] = [];
 
   async function newUserKey(email?: string): Promise<string> {
-    const { POST } = await import("@/app/api/auth/generate-key/route");
-    const req = new Request("http://test/api/auth/generate-key", {
-      method: "POST",
-      headers: jsonHeaders(),
-      body: JSON.stringify(email ? { email } : {}),
+    const { randomUUID } = await import("node:crypto");
+    const { issueApiKey } = await import("@/lib/apiKeys");
+    const user = await prisma.user.create({
+      data: {
+        name: "API key user",
+        email: email ?? `apikey_${randomUUID()}@stashjson.local`,
+      },
     });
-    const res = await POST(req);
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { api_key: string };
-    const key = await prisma.apiKey.findUnique({
-      where: { keyHash: (await import("@/lib/utils")).hashApiKey(body.api_key) },
-    });
-    if (key) createdUserIds.push(key.userId);
-    return body.api_key;
+    createdUserIds.push(user.id);
+    const { raw } = await issueApiKey(user.id, "Default key");
+    return raw;
   }
 
   beforeAll(async () => {

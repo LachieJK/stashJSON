@@ -5,10 +5,6 @@ import { z } from "zod";
 
 const jsonObject = z.record(z.string(), z.unknown());
 
-export const apiKeyCreateSchema = z
-  .object({ email: z.string().nullish() })
-  .nullish();
-
 export const documentCreateSchema = z.object({
   json_data: jsonObject,
   is_public: z.boolean().default(false),
