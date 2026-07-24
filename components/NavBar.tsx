@@ -72,112 +72,114 @@ export function NavBar({
   }
 
   return (
-    <div className="nav-shell">
-      <header className="navbar">
-        <Brand />
+    <header className="navbar">
+      <Brand />
 
-        {/* Desktop: inline links, hairline divider, then the auth cluster. */}
+      {/* Desktop: inline links, hairline divider, then the auth cluster. */}
+      <nav
+        className="ml-auto hidden items-center gap-5 md:flex"
+        aria-label="Primary"
+      >
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="nav-link"
+            aria-current={current(link)}
+          >
+            {link.label}
+          </Link>
+        ))}
+        <span className="h-4 w-px bg-border" aria-hidden />
+        {authed ? (
+          <>
+            {email ? (
+              <span className="hidden max-w-44 truncate font-mono text-xs text-muted lg:inline">
+                {email}
+              </span>
+            ) : null}
+            <LogoutButton />
+          </>
+        ) : (
+          <>
+            <Link
+              href="/login"
+              className="nav-link"
+              aria-current={current({ href: "/login", label: "Log in" })}
+            >
+              Log in
+            </Link>
+            <Link href="/signup" className="btn btn-sm">
+              Sign up
+            </Link>
+          </>
+        )}
+      </nav>
+
+      {/* Mobile: disclosure trigger + dropdown panel. */}
+      <button
+        type="button"
+        className="nav-icon-btn ml-auto md:hidden"
+        aria-expanded={open}
+        aria-controls="site-nav-menu"
+        aria-label={open ? "Close navigation menu" : "Open navigation menu"}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? <XIcon /> : <MenuIcon />}
+      </button>
+
+      {open ? (
         <nav
-          className="ml-auto hidden items-center gap-5 md:flex"
+          id="site-nav-menu"
+          className="nav-menu md:hidden"
           aria-label="Primary"
         >
+          <Link
+            href="/"
+            className="nav-menu-link"
+            aria-current={pathname === "/" ? "page" : undefined}
+          >
+            Home
+          </Link>
           {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="nav-link"
+              className="nav-menu-link"
               aria-current={current(link)}
             >
               {link.label}
             </Link>
           ))}
-          <span className="h-4 w-px bg-border" aria-hidden />
+          <span className="my-1.5 border-t border-border" aria-hidden />
           {authed ? (
             <>
               {email ? (
-                <span className="hidden max-w-44 truncate font-mono text-xs text-muted lg:inline">
+                <span className="truncate px-3 pb-1.5 font-mono text-xs text-muted">
                   {email}
                 </span>
               ) : null}
-              <LogoutButton />
+              <LogoutButton className="nav-menu-link" />
             </>
           ) : (
             <>
               <Link
                 href="/login"
-                className="nav-link"
-                aria-current={current({ href: "/login", label: "Log in" })}
+                className="nav-menu-link"
+                aria-current={
+                  pathname === "/login" ? ("page" as const) : undefined
+                }
               >
                 Log in
               </Link>
-              <Link href="/signup" className="btn btn-sm">
+              <Link href="/signup" className="btn mt-1">
                 Sign up
               </Link>
             </>
           )}
         </nav>
-
-        {/* Mobile: disclosure trigger + dropdown panel. */}
-        <button
-          type="button"
-          className="nav-icon-btn ml-auto md:hidden"
-          aria-expanded={open}
-          aria-controls="site-nav-menu"
-          aria-label={open ? "Close navigation menu" : "Open navigation menu"}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? <XIcon /> : <MenuIcon />}
-        </button>
-
-        {open ? (
-          <nav id="site-nav-menu" className="nav-menu md:hidden" aria-label="Primary">
-            <Link
-              href="/"
-              className="nav-menu-link"
-              aria-current={pathname === "/" ? "page" : undefined}
-            >
-              Home
-            </Link>
-            {links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="nav-menu-link"
-                aria-current={current(link)}
-              >
-                {link.label}
-              </Link>
-            ))}
-            <span className="my-1.5 border-t border-border" aria-hidden />
-            {authed ? (
-              <>
-                {email ? (
-                  <span className="truncate px-3 pb-1.5 font-mono text-xs text-muted">
-                    {email}
-                  </span>
-                ) : null}
-                <LogoutButton className="nav-menu-link" />
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="nav-menu-link"
-                  aria-current={
-                    pathname === "/login" ? ("page" as const) : undefined
-                  }
-                >
-                  Log in
-                </Link>
-                <Link href="/signup" className="btn mt-1">
-                  Sign up
-                </Link>
-              </>
-            )}
-          </nav>
-        ) : null}
-      </header>
-    </div>
+      ) : null}
+    </header>
   );
 }
 
