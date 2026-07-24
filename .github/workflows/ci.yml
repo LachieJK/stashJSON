@@ -12,7 +12,7 @@ jobs:
     name: Lint, typecheck, and test
     runs-on: ubuntu-latest
     env:
-      # Throwaway CI database — mirrors what `npm run test` hardcodes.
+      # Throwaway CI / testing database — mirrors what `npm run test` hardcodes.
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/stashjson_test?schema=public
     steps:
       - name: Checkout
