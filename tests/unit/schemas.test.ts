@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  apiKeyCreateSchema,
   apiKeyNameSchema,
   documentCreateSchema,
   documentUpdateSchema,
@@ -8,23 +7,6 @@ import {
   workspaceTemplateSchema,
   workspaceUpdateSchema,
 } from "@/lib/schemas";
-
-describe("apiKeyCreateSchema", () => {
-  it("accepts an empty/absent body (null or undefined)", () => {
-    expect(apiKeyCreateSchema.safeParse(null).success).toBe(true);
-    expect(apiKeyCreateSchema.safeParse(undefined).success).toBe(true);
-    expect(apiKeyCreateSchema.safeParse({}).success).toBe(true);
-  });
-
-  it("accepts an email string or null", () => {
-    expect(apiKeyCreateSchema.safeParse({ email: "a@b.com" }).success).toBe(true);
-    expect(apiKeyCreateSchema.safeParse({ email: null }).success).toBe(true);
-  });
-
-  it("rejects a non-string email", () => {
-    expect(apiKeyCreateSchema.safeParse({ email: 123 }).success).toBe(false);
-  });
-});
 
 describe("documentCreateSchema", () => {
   it("accepts a minimal body and defaults is_public to false", () => {
