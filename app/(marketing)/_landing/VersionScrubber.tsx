@@ -3,14 +3,9 @@
 import { useRef, useState } from "react";
 import { MethodBadge, type Method } from "../_components";
 
-/*
- * The hero's live document: a rail the visitor sweeps to scrub one document
- * through v1 → v5, with the fields that changed at each revision lit. Nothing
- * animates on its own — the product's thesis is handed to the cursor.
- *
- * The rail and the pane share one revision index, which is why they live in
- * one component rather than two.
- */
+// The hero's live document: a rail the visitor sweeps to scrub one document
+// through v1 → v5, with the fields that changed at each revision lit. The rail
+// and the pane share one revision index, so they live in one component.
 
 type Rev = {
   version: number;
@@ -68,7 +63,7 @@ const REVS: Rev[] = [
   },
 ];
 
-function render(v: string | number | boolean) {
+function formatValue(v: string | number | boolean) {
   return typeof v === "string" ? `"${v}"` : String(v);
 }
 
@@ -94,12 +89,15 @@ function DocPane({ index }: { index: number }) {
         <code>
           <span className="text-muted">{"{"}</span>
           {entries.map(([k, v], i) => {
-            const changed = render(prev[k as keyof typeof prev]) !== render(v);
+            const changed =
+              formatValue(prev[k as keyof typeof prev]) !== formatValue(v);
             return (
               <span key={k}>
                 {"\n  "}
                 <span className="text-muted">&quot;{k}&quot;:</span>{" "}
-                <span className={changed ? "text-ok" : ""}>{render(v)}</span>
+                <span className={changed ? "text-ok" : ""}>
+                  {formatValue(v)}
+                </span>
                 {i < entries.length - 1 ? (
                   <span className="text-muted">,</span>
                 ) : null}

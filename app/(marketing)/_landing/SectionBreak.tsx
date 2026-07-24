@@ -2,17 +2,8 @@
 
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 
-/*
- * A full-bleed band tiled with the page's + glyph, separating sections the way
- * a rule does but with texture. Two stacked grids: the resting one of + marks
- * in border grey, and above it the same cells holding JSON punctuation at full
- * contrast, revealed only inside a soft disc that follows the pointer. The
- * band is dead still until a cursor crosses it.
- *
- * Glyphs are picked by an index hash rather than Math.random so the server and
- * the client render the same band.
- */
-
+// Glyphs are picked by an index hash rather than Math.random, so the server
+// and the client render the same band. Layout and reveal live in globals.css.
 const GLYPHS = ["{", "}", "[", "]", ":", ",", '"', "0", "1", "+"];
 const CELLS = 300;
 const glyphAt = (i: number) => GLYPHS[(i * 7919) % GLYPHS.length];

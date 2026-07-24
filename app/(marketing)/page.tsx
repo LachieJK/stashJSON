@@ -13,7 +13,6 @@ import { VersionScrubber } from "./_landing/VersionScrubber";
  * write streaks travelling the rails. Token colours only.
  *
  * Server-rendered except for the three interactive pieces under _landing/.
- * All copy here is placeholder.
  */
 
 const TICKER = [
@@ -50,65 +49,65 @@ const STEPS = [
   },
 ];
 
-const FEATURES: [string, string, string][] = [
-  [
-    "Schema enforcement",
-    "Attach a JSON Schema to a workspace and every write is validated against it — including the merged result of a PATCH.",
-    `{ "type": "object", "required": ["title"] }`,
-  ],
-  [
-    "Automatic versioning",
-    "Each update snapshots the previous document inside a transaction. Nothing is ever lost; v1 stays fetchable forever.",
-    "GET /api/documents/:id/versions/1",
-  ],
-  [
-    "Workspaces",
-    "Organise documents into per-project collections, each with its own optional schema and its own scope.",
-    "workspaces/invoices · 128 docs",
-  ],
-  [
-    "Keys & web login",
-    "Automate with rotatable API keys, or drive the whole service from the dashboard with an email login.",
-    "X-API-Key: sk_live_••••••3f2a",
-  ],
+const FEATURES: { title: string; body: string; frag: string }[] = [
+  {
+    title: "Schema enforcement",
+    body: "Attach a JSON Schema to a workspace and every write is validated against it — including the merged result of a PATCH.",
+    frag: `{ "type": "object", "required": ["title"] }`,
+  },
+  {
+    title: "Automatic versioning",
+    body: "Each update snapshots the previous document inside a transaction. Nothing is ever lost; v1 stays fetchable forever.",
+    frag: "GET /api/documents/:id/versions/1",
+  },
+  {
+    title: "Workspaces",
+    body: "Organise documents into per-project collections, each with its own optional schema and its own scope.",
+    frag: "workspaces/invoices · 128 docs",
+  },
+  {
+    title: "Keys & web login",
+    body: "Automate with rotatable API keys, or drive the whole service from the dashboard with an email login.",
+    frag: "X-API-Key: sk_live_••••••3f2a",
+  },
 ];
 
-const USE_CASES: [string, string][] = [
-  [
-    "Config & feature flags",
-    "Ship config without a deploy. Fetch any earlier version and write it back.",
-  ],
-  [
-    "Form & webhook payloads",
-    "Land arbitrary JSON now, shape it later. Nothing is dropped.",
-  ],
-  [
-    "Content & drafts",
-    "Draft → review → published, with the full edit history for free.",
-  ],
+const USE_CASES: { title: string; body: string }[] = [
+  {
+    title: "Config & feature flags",
+    body: "Ship config without a deploy. Fetch any earlier version and write it back.",
+  },
+  {
+    title: "Form & webhook payloads",
+    body: "Land arbitrary JSON now, shape it later. Nothing is dropped.",
+  },
+  {
+    title: "Content & drafts",
+    body: "Draft → review → published, with the full edit history for free.",
+  },
 ];
 
-const FAQ: [string, string][] = [
-  [
-    "Do I need a database?",
-    "No. StashJSON is the database. You authenticate with an API key and POST JSON — there is no schema migration, no connection string, no ORM.",
-  ],
-  [
-    "What happens to old versions?",
-    "Every PUT and PATCH snapshots the previous document before writing. Old versions are read-only and fetchable by number, forever.",
-  ],
-  [
-    "Can I enforce a shape?",
-    "Yes — attach a JSON Schema (Draft-07) to a workspace and every document written into it is validated on the way in.",
-  ],
-  [
-    "Is anything public by default?",
-    "No. Documents are private to your account unless you explicitly mark them public, in which case they are readable without a key.",
-  ],
-  [
-    "How do I move off it?",
-    "Your data is plain JSON. List your documents, GET each one, and you have a complete export — no proprietary format to unwind.",
-  ],
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: "Do I need a database?",
+    a: "No. StashJSON is the database. You authenticate with an API key and POST JSON — there is no schema migration, no connection string, no ORM.",
+  },
+  {
+    q: "What happens to old versions?",
+    a: "Every PUT and PATCH snapshots the previous document before writing. Old versions are read-only and fetchable by number, forever.",
+  },
+  {
+    q: "Can I enforce a shape?",
+    a: "Yes — attach a JSON Schema (Draft-07) to a workspace and every document written into it is validated on the way in.",
+  },
+  {
+    q: "Is anything public by default?",
+    a: "No. Documents are private to your account unless you explicitly mark them public, in which case they are readable without a key.",
+  },
+  {
+    q: "How do I move off it?",
+    a: "Your data is plain JSON. List your documents, GET each one, and you have a complete export — no proprietary format to unwind.",
+  },
 ];
 
 export default function LandingPage() {
@@ -145,7 +144,6 @@ export default function LandingPage() {
               <CopyLine />
             </div>
 
-            {/* The inner rail — the thing that stops the page being one tube. */}
             <div className="relative border-t border-border px-8 pt-10 pb-16 lg:border-t-0 lg:border-l">
               <Mark>Version history</Mark>
               <VersionScrubber />
@@ -225,7 +223,7 @@ export default function LandingPage() {
               </h2>
             </div>
             <div className="border-border lg:border-l">
-              {FEATURES.map(([title, body, frag]) => (
+              {FEATURES.map(({ title, body, frag }) => (
                 <div
                   key={title}
                   className="group border-t border-border px-8 py-7 transition-colors first:lg:border-t-0 hover:bg-panel"
@@ -266,7 +264,7 @@ export default function LandingPage() {
             </h2>
           </div>
           <div className="mt-12 grid border-t border-border sm:grid-cols-3">
-            {USE_CASES.map(([title, body], i) => (
+            {USE_CASES.map(({ title, body }, i) => (
               <div
                 key={title}
                 className={`p-8 ${
@@ -303,7 +301,7 @@ export default function LandingPage() {
               </p>
             </div>
             <div className="border-border lg:border-l">
-              {FAQ.map(([q, a]) => (
+              {FAQ.map(({ q, a }) => (
                 <details
                   key={q}
                   className="group border-t border-border px-8 py-6 first:lg:border-t-0 [&_summary::-webkit-details-marker]:hidden"
@@ -322,8 +320,7 @@ export default function LandingPage() {
         </Frame>
       </section>
 
-      {/* ── Closing — one centred column; the page ends on whitespace and type
-          rather than another split. */}
+      {/* ── Closing. */}
       <SectionBreak />
       <section>
         <Frame>
