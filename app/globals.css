@@ -34,8 +34,8 @@
  * must stay `inline` (the var() is resolved at the usage site). */
 @theme inline {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
-    monospace;
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /*
@@ -193,18 +193,14 @@
   }
 
   /*
-   * Floating navbar — one global bar on every page (marketing, auth,
-   * dashboard). Detached from the viewport edges, pinned by the sticky shell;
-   * the bar itself is a hairline-bordered translucent panel with backdrop
-   * blur, so content scrolling underneath frosts through. Flat, per the brief.
+   * The navbar — one global bar on every page except the (auth) group. Flush
+   * to the top edge, full-bleed, opaque and square: a hairline underline is
+   * its only edge, so it reads as the page's top rule rather than a floating
+   * panel. Sticky itself, so it needs no shell. Flat, per the brief.
    */
-  .nav-shell {
-    @apply sticky top-0 z-40 px-3 pt-3 sm:px-6;
-  }
   .navbar {
-    @apply relative mx-auto flex h-14 max-w-[80vw] items-center gap-4
-      rounded-[var(--radius-card)] border border-border bg-bg/75 px-4
-      backdrop-blur-md sm:px-5;
+    @apply sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-border
+      bg-bg px-6;
   }
 
   /* Nav link: muted → full contrast, with a hairline underline that slides in
@@ -240,11 +236,11 @@
       transition-colors hover:border-muted hover:text-text;
   }
 
-  /* Mobile disclosure panel: hangs below the bar, same frosted treatment. */
+  /* Mobile disclosure panel: hangs flush off the bar's underline, square and
+   * opaque like the bar itself. */
   .nav-menu {
-    @apply absolute inset-x-0 top-full mt-2 flex flex-col gap-0.5
-      rounded-[var(--radius-card)] border border-border bg-bg/90 p-2
-      backdrop-blur-md;
+    @apply absolute inset-x-0 top-full flex flex-col gap-0.5 border-b
+      border-border bg-bg p-2;
   }
   .nav-menu-link {
     @apply flex min-h-10 w-full items-center rounded-md px-3 text-left text-sm text-muted
@@ -273,6 +269,11 @@
    * continuous full-page rails. */
   .frame-col {
     @apply relative mx-auto max-w-4xl border-x border-border;
+  }
+
+  /* The same frame, wide enough for a section to hold two real columns. */
+  .frame-wide {
+    @apply relative mx-auto max-w-6xl border-x border-border;
   }
 
   /* Sections own their top border so rules run edge-to-edge across the rails. */
@@ -321,29 +322,49 @@
     @apply font-mono text-[11px] tracking-[0.2em] uppercase text-muted;
   }
 
-  /* Ambient write pulses: light streaks travelling down the rails. One per
-   * rail per section, scattered in time via --pulse-delay/--pulse-duration
-   * set inline at the call site. Each streak is clipped to its section and
-   * pauses off-screen before looping. The global reduced-motion guard
-   * collapses the animation, leaving the rail plain. */
-  .rail-pulse {
+  /*
+   * Ambient write streaks: light travelling along a frame rail — down or up a
+   * side rail, left or right along a section's own top rule. Only ever applied
+   * to rails that belong to the frame: never the navbar, the ticker band or
+   * the break bands. Each call site sets its own direction, duration and
+   * negative start offset via --streak-*. The global reduced-motion guard
+   * collapses the animation, leaving the rail plain.
+   */
+  .rail-streak {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -1px;
-    width: 1px;
     overflow: hidden;
     pointer-events: none;
   }
-  .rail-pulse-r {
-    left: auto;
+  .rail-streak-v {
+    top: 0;
+    bottom: 0;
+    width: 1px;
+  }
+  .rail-streak-v.is-left {
+    left: -1px;
+  }
+  .rail-streak-v.is-right {
     right: -1px;
   }
-  .rail-pulse::after {
+  .rail-streak-h {
+    top: -1px;
+    right: 0;
+    left: 0;
+    height: 1px;
+  }
+  .rail-streak::after {
     content: "";
     position: absolute;
     top: 0;
     left: 0;
+    opacity: 0.85;
+    animation-name: var(--streak-anim);
+    animation-duration: var(--streak-duration, 12s);
+    animation-delay: var(--streak-delay, 0s);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  .rail-streak-v::after {
     width: 1px;
     height: 180px;
     background: linear-gradient(
@@ -352,38 +373,85 @@
       var(--color-text),
       transparent
     );
-    opacity: 0.9;
-    animation: rail-pulse var(--pulse-duration, 6.5s) linear infinite;
-    animation-delay: var(--pulse-delay, 0s);
+  }
+  .rail-streak-h::after {
+    height: 1px;
+    width: 220px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-text),
+      transparent
+    );
   }
 
   /*
-   * Living-document hero: one document cycling v1 → v2 → v3 on a 12s loop,
-   * with superseded versions accumulating beneath it. The v3 state and both
-   * history rows are the elements' *base* styles, so when the reduced-motion
-   * guard collapses the animations the demo freezes on its final frame.
-   * The three states share one opacity envelope, offset by negative delays.
+   * Section break: a full-bleed band tiled with the + glyph — the page's own
+   * mark used as texture, so the breaks belong to the same system as the
+   * section labels. Cells sit on a fixed 28px grid and are clipped, so the
+   * band reads as a continuous pattern at any width.
+   *
+   * Two stacked grids: the resting one of + marks in border grey, and, on top,
+   * the same cells holding JSON punctuation at full contrast — revealed only
+   * inside a disc that follows the pointer. Nothing travels; the band is still
+   * until a cursor crosses it, and then the pattern resolves into the thing
+   * the product actually stores.
    */
-  .doc-cycle-1,
-  .doc-cycle-2 {
-    opacity: 0;
+  .section-break {
+    position: relative;
+    height: 84px;
+    overflow: hidden;
   }
-  .doc-cycle-1 {
-    animation: doc-cycle 12s infinite;
+  .section-break-grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 28px);
+    grid-auto-rows: 28px;
+    justify-content: center;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-border);
+    user-select: none;
   }
-  .doc-cycle-2 {
-    animation: doc-cycle 12s infinite;
-    animation-delay: -8s;
+  .section-break-lit {
+    color: var(--color-text);
+    opacity: var(--lit, 0);
+    transition: opacity 350ms ease;
+    -webkit-mask-image: radial-gradient(
+      96px circle at var(--mx, -200px) var(--my, -200px),
+      #000 0%,
+      rgba(0, 0, 0, 0.45) 50%,
+      transparent 78%
+    );
+    mask-image: radial-gradient(
+      96px circle at var(--mx, -200px) var(--my, -200px),
+      #000 0%,
+      rgba(0, 0, 0, 0.45) 50%,
+      transparent 78%
+    );
   }
-  .doc-cycle-3 {
-    animation: doc-cycle 12s infinite;
-    animation-delay: -4s;
+  .section-break-lit span {
+    transition: transform 350ms ease;
   }
-  .doc-history-1 {
-    animation: doc-history-1 12s infinite;
+  .section-break:hover .section-break-lit span {
+    transform: scale(1.15);
   }
-  .doc-history-2 {
-    animation: doc-history-2 12s infinite;
+
+  /* The feature ticker: a full-bleed strip of mono labels, paused on hover so
+   * a passing label can be read. The track holds the list twice, which is what
+   * makes the -50% translation seamless. */
+  .ticker {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .ticker-track {
+    display: inline-flex;
+    animation: ticker 42s linear infinite;
+  }
+  .ticker:hover .ticker-track {
+    animation-play-state: paused;
   }
 
   /*
@@ -561,38 +629,46 @@
   }
 }
 
-/* Browsers without backdrop-filter get a solid page-colour bar instead of a
- * translucent one, so nav text never sits on unblurred scrolling content. */
-@supports not (backdrop-filter: blur(1px)) {
-  .navbar,
-  .nav-menu {
-    background: var(--color-bg);
-  }
-}
-
-@keyframes rail-pulse {
+/* The rail streaks. Each runs the full length of its rail and off the far end;
+ * 150vh/110vw are far enough to clear even a tall mobile section. */
+@keyframes rail-streak-down {
   from {
     transform: translateY(-180px);
   }
   to {
-    /* Far enough to clear even tall mobile sections before looping. */
     transform: translateY(150vh);
   }
 }
+@keyframes rail-streak-up {
+  from {
+    transform: translateY(150vh);
+  }
+  to {
+    transform: translateY(-180px);
+  }
+}
+@keyframes rail-streak-right {
+  from {
+    transform: translateX(-220px);
+  }
+  to {
+    transform: translateX(110vw);
+  }
+}
+@keyframes rail-streak-left {
+  from {
+    transform: translateX(110vw);
+  }
+  to {
+    transform: translateX(-220px);
+  }
+}
 
-/* Visible for the first third of the loop, hidden for the rest; the 100%
- * frame crossfades back into the next cycle's opening state. */
-@keyframes doc-cycle {
-  0%,
-  30% {
-    opacity: 1;
-  }
-  33.3%,
-  96.7% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
+/* The track holds the label list twice, so translating it exactly half its
+ * width lands on an identical frame. */
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
   }
 }
 
@@ -621,29 +697,5 @@
   20%,
   100% {
     color: var(--color-muted);
-  }
-}
-
-/* v1's snapshot appears once v2 is written (1/3 into the loop)... */
-@keyframes doc-history-1 {
-  0%,
-  32% {
-    opacity: 0;
-  }
-  38%,
-  100% {
-    opacity: 1;
-  }
-}
-
-/* ...and v2's once v3 is written (2/3 in). Both clear at the loop reset. */
-@keyframes doc-history-2 {
-  0%,
-  65% {
-    opacity: 0;
-  }
-  71%,
-  100% {
-    opacity: 1;
   }
 }
