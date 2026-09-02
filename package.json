@@ -20,6 +20,8 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
+    "proto:ratelimit": "docker compose up -d && npx tsx lib/rateLimit/prototype/setup.ts && npx tsx lib/rateLimit/prototype/tui.ts",
+    "proto:ratelimit:hammer": "docker compose up -d && npx tsx lib/rateLimit/prototype/setup.ts && npx tsx lib/rateLimit/prototype/hammer.ts",
     "sandcastle": "npx tsx .sandcastle/main.mts"
   },
   "dependencies": {

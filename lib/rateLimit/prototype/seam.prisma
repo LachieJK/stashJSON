@@ -1,0 +1,24 @@
+// PROTOTYPE — issue #43. Throwaway.
+//
+// A scratch datamodel holding only the counter, used to answer the Prisma-seam
+// question: does `prisma migrate` emit the fillfactor and autovacuum settings,
+// and if not, does it later see a table carrying them as drift?
+//
+// Not part of prisma/schema.prisma. Driven by seam.sh.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../../prisma/generated-seam"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model RateLimitBucket {
+  key       String   @id
+  tokens    Float
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(6)
+
+  @@map("rate_limit_bucket")
+}
