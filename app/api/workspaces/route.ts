@@ -4,10 +4,11 @@ import { handle, parseBody } from "@/lib/http";
 import { requireUser } from "@/lib/auth";
 import { workspaceCreateSchema } from "@/lib/schemas";
 import { workspaceResponse } from "@/lib/serializers";
+import { withRateLimit } from "@/lib/rateLimit";
 
 // POST /api/workspaces — create a workspace.
-export async function POST(req: Request) {
-  return handle(async () => {
+export const POST = withRateLimit((req: Request) =>
+  handle(async () => {
     const user = await requireUser(req);
     const body = await parseBody(req, workspaceCreateSchema);
 
@@ -18,12 +19,12 @@ export async function POST(req: Request) {
       workspaceResponse(workspace, { documentCount: 0, hasTemplate: false }),
       { status: 201 },
     );
-  });
-}
+  }),
+);
 
 // GET /api/workspaces — list the caller's workspaces with document counts.
-export async function GET(req: Request) {
-  return handle(async () => {
+export const GET = withRateLimit((req: Request) =>
+  handle(async () => {
     const user = await requireUser(req);
 
     const workspaces = await prisma.workspace.findMany({
@@ -43,5 +44,5 @@ export async function GET(req: Request) {
         }),
       ),
     );
-  });
-}
+  }),
+);

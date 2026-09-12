@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { hashApiKey } from "@/lib/utils";
 import { ApiError } from "@/lib/http";
 import { getServerSession, getSessionFromHeaders } from "@/lib/betterAuth";
+import { consume, recordDecision } from "@/lib/rateLimit";
+import { PLANS } from "@/lib/plans";
 
 /**
  * Resolve a user from a raw API key, or null if absent/unknown/revoked.
@@ -51,7 +53,31 @@ export async function resolveRequestUser(req: Request): Promise<User | null> {
 export async function requireUser(req: Request): Promise<User> {
   const user = await resolveRequestUser(req);
   if (!user) throw new ApiError(401, "Authentication required");
+  await meterApi(req, user);
   return user;
+}
+
+/**
+ * Charge one token against the caller's `user:<id>:api` bucket (all of a user's
+ * keys share it) and reject with `429` when it is empty. The decision is stashed
+ * so `withRateLimit` can stamp the `X-RateLimit-*` headers onto the response.
+ *
+ * Fail-open: a limiter error can only happen after identity resolution has
+ * already made a successful DB round trip, so failing closed would buy no
+ * enforcement and could turn a blip into an outage. We log and let the request
+ * through. Metering lives here rather than in the nullable resolvers so an
+ * unauthenticated request (which resolves no bucket) is never billed.
+ */
+async function meterApi(req: Request, user: User): Promise<void> {
+  let decision;
+  try {
+    decision = await consume(`user:${user.id}:api`, PLANS[user.tier].policy);
+  } catch (err) {
+    console.error("Rate limiter unavailable; failing open:", err);
+    return;
+  }
+  recordDecision(req, decision);
+  if (!decision.allowed) throw new ApiError(429, "API rate limit exceeded");
 }
 
 /**

@@ -166,6 +166,20 @@ model Document {
   @@map("documents")
 }
 
+// Per-account rate-limit token bucket (see lib/rateLimit.ts). Keyed by the
+// opaque composite `user:<id>:<surface>`. Indexed on `key` ONLY — `tokens` and
+// `updated_at` change on every request, so any extra index would forfeit
+// heap-only-tuple updates. The migration hand-appends the fillfactor and
+// autovacuum reloptions Prisma does not model.
+
+model RateLimitBucket {
+  key       String   @id
+  tokens    Float
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(6)
+
+  @@map("rate_limit_bucket")
+}
+
 model DocumentVersion {
   id         String   @id @default(uuid())
   documentId String   @map("document_id")

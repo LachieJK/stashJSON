@@ -6,12 +6,13 @@ import { workspaceTemplateSchema } from "@/lib/schemas";
 import { templateResponse } from "@/lib/serializers";
 import { isValidJsonSchema } from "@/lib/templateValidator";
 import { loadOwnedWorkspace } from "@/lib/workspaces";
+import { withRateLimit } from "@/lib/rateLimit";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 // PUT /api/workspaces/:id/template — create or replace the workspace's schema.
-export async function PUT(req: Request, ctx: Ctx) {
-  return handle(async () => {
+export const PUT = withRateLimit((req: Request, ctx: Ctx) =>
+  handle(async () => {
     const { id } = await ctx.params;
     await loadOwnedWorkspace(req, id);
     const body = await parseBody(req, workspaceTemplateSchema);
@@ -30,12 +31,12 @@ export async function PUT(req: Request, ctx: Ctx) {
       update: { jsonSchema: body.json_schema as Prisma.InputJsonValue },
     });
     return NextResponse.json(templateResponse(template));
-  });
-}
+  }),
+);
 
 // GET /api/workspaces/:id/template
-export async function GET(req: Request, ctx: Ctx) {
-  return handle(async () => {
+export const GET = withRateLimit((req: Request, ctx: Ctx) =>
+  handle(async () => {
     const { id } = await ctx.params;
     await loadOwnedWorkspace(req, id);
 
@@ -44,12 +45,12 @@ export async function GET(req: Request, ctx: Ctx) {
     });
     if (!template) throw new ApiError(404, "Workspace template not found");
     return NextResponse.json(templateResponse(template));
-  });
-}
+  }),
+);
 
 // DELETE /api/workspaces/:id/template
-export async function DELETE(req: Request, ctx: Ctx) {
-  return handle(async () => {
+export const DELETE = withRateLimit((req: Request, ctx: Ctx) =>
+  handle(async () => {
     const { id } = await ctx.params;
     await loadOwnedWorkspace(req, id);
 
@@ -60,5 +61,5 @@ export async function DELETE(req: Request, ctx: Ctx) {
 
     await prisma.workspaceTemplate.delete({ where: { workspaceId: id } });
     return new NextResponse(null, { status: 204 });
-  });
-}
+  }),
+);

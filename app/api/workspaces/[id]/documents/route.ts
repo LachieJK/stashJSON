@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ApiError, handle } from "@/lib/http";
 import { documentResponse } from "@/lib/serializers";
 import { loadOwnedWorkspace } from "@/lib/workspaces";
+import { withRateLimit } from "@/lib/rateLimit";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -10,8 +11,8 @@ const PAGE_SIZE = 25;
 
 // GET /api/workspaces/:id/documents — newest first, 25 per page.
 // Cursor pagination: pass ?after=<lastDocumentId> to fetch the next page.
-export async function GET(req: Request, ctx: Ctx) {
-  return handle(async () => {
+export const GET = withRateLimit((req: Request, ctx: Ctx) =>
+  handle(async () => {
     const { id } = await ctx.params;
     await loadOwnedWorkspace(req, id);
 
@@ -35,5 +36,5 @@ export async function GET(req: Request, ctx: Ctx) {
     });
 
     return NextResponse.json(documents.map(documentResponse));
-  });
-}
+  }),
+);

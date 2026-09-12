@@ -1,9 +1,11 @@
-// Static, intentionally inert plan catalog for the pricing page — no Stripe, env, or network.
+// Static, intentionally inert plan catalog for the pricing page — no Stripe,
+// env, or network. It is also the single source of each tier's rate-limit
+// policy, so `/pricing` and the limiter cannot advertise different numbers.
 
-export type PlanTierId = "free" | "pro" | "team";
+import type { PlanTier } from "@/prisma/generated/enums";
+import type { BucketPolicy } from "@/lib/rateLimit";
 
 export type Plan = {
-  id: PlanTierId;
   name: string;
   /** Whole US dollars per month. 0 means free. */
   priceMonthly: number;
@@ -15,11 +17,38 @@ export type Plan = {
 
   /** Stripe Price ID for the plan's recurring subscription; unset until billing is wired. */
   stripePriceId?: string;
+
+  /**
+   * The tier's `user:<id>:api` token-bucket policy. `refillPerSecond` is the
+   * advertised sustained rate; `capacity` is one minute's worth, the burst
+   * ceiling. Numbers are placeholders (60 / 600 / 6,000 req/min).
+   */
+  policy: BucketPolicy;
 };
 
-export const PLANS: Plan[] = [
-  {
-    id: "free",
+/**
+ * Build a policy, rejecting `refillPerSecond <= 0` at the one site where a
+ * policy is constructed. A zero/negative rate would make `Retry-After`
+ * non-finite, so forbidding it here makes that unrepresentable and removes any
+ * need for an `isFinite` check downstream. (A never-refilling bucket is still
+ * valid as a *bucket* — `consume()` accepts it — just not as a plan.)
+ */
+export function makePolicy(
+  capacity: number,
+  refillPerSecond: number,
+): BucketPolicy {
+  if (refillPerSecond <= 0) {
+    throw new Error(
+      `refillPerSecond must be > 0 (got ${refillPerSecond}): a plan's advertised rate must refill`,
+    );
+  }
+  return { capacity, refillPerSecond };
+}
+
+// Keyed by the Prisma `PlanTier` enum so `PLANS[user.tier]` is a total lookup
+// with no `undefined` branch.
+export const PLANS: Record<PlanTier, Plan> = {
+  FREE: {
     name: "Free",
     priceMonthly: 0,
     tagline: "Everything you need to start storing JSON.",
@@ -32,9 +61,9 @@ export const PLANS: Plan[] = [
       "1 API key",
       "Community support",
     ],
+    policy: makePolicy(60, 1),
   },
-  {
-    id: "pro",
+  PRO: {
     name: "Pro",
     priceMonthly: 19,
     tagline: "For developers shipping real projects.",
@@ -48,9 +77,9 @@ export const PLANS: Plan[] = [
       "10 API keys",
       "Email support",
     ],
+    policy: makePolicy(600, 10),
   },
-  {
-    id: "team",
+  TEAM: {
     name: "Team",
     priceMonthly: 99,
     tagline: "For teams that need scale and control.",
@@ -63,5 +92,13 @@ export const PLANS: Plan[] = [
       "Unlimited API keys",
       "Priority support & SLA",
     ],
+    policy: makePolicy(6000, 100),
   },
-];
+};
+
+/**
+ * The flat, non-tiered policy for the `user:<id>:dashboard` surface — a high
+ * ceiling that is never advertised. Wired into `requireSessionUser` in a later
+ * slice; defined here so every policy lives in one file.
+ */
+export const DASHBOARD_POLICY: BucketPolicy = makePolicy(6000, 100);

@@ -16,9 +16,9 @@ export default function PricingPage() {
       </section>
 
       <section className="mt-12 grid gap-4 sm:grid-cols-3">
-        {PLANS.map((plan) => (
+        {Object.entries(PLANS).map(([tier, plan]) => (
           <div
-            key={plan.id}
+            key={tier}
             className={`card flex flex-col ${
               plan.featured ? "border-accent" : ""
             }`}
@@ -59,7 +59,7 @@ export default function PricingPage() {
             </ul>
 
             <Link
-              href={`/signup?plan=${plan.id}`}
+              href={`/signup?plan=${tier.toLowerCase()}`}
               className={`mt-auto ${plan.featured ? "btn" : "btn btn-secondary"}`}
             >
               {plan.ctaLabel}

@@ -7,10 +7,11 @@ import { documentCreateSchema } from "@/lib/schemas";
 import { generateDocumentId } from "@/lib/utils";
 import { assertMatchesWorkspaceTemplate } from "@/lib/documents";
 import { documentResponse } from "@/lib/serializers";
+import { withRateLimit } from "@/lib/rateLimit";
 
 // POST /api/documents — create a document (optionally inside a workspace).
-export async function POST(req: Request) {
-  return handle(async () => {
+export const POST = withRateLimit((req: Request) =>
+  handle(async () => {
     const user = await requireUser(req);
     const body = await parseBody(req, documentCreateSchema);
 
@@ -40,5 +41,5 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(documentResponse(doc), { status: 201 });
-  });
-}
+  }),
+);
