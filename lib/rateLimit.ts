@@ -131,11 +131,14 @@ export async function consume(
 
   const refill = policy.refillPerSecond;
   const deficit = Math.max(0, 1 - row.tokens);
-  const retryAfterSeconds = row.allowed
-    ? 0
-    : refill > 0
-      ? Math.ceil(deficit / refill)
-      : Infinity;
+  let retryAfterSeconds: number;
+  if (row.allowed) {
+    retryAfterSeconds = 0;
+  } else if (refill > 0) {
+    retryAfterSeconds = Math.ceil(deficit / refill);
+  } else {
+    retryAfterSeconds = Infinity;
+  }
 
   // When the bucket is full again: the gap to capacity divided by the rate.
   const secondsUntilFull =
