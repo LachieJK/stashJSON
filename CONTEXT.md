@@ -34,6 +34,24 @@ This rule has exactly one owner in the code: `updateDocument` in
 `lib/documents.ts`. Both update route handlers (`PUT` and `PATCH` on
 `/api/documents/:id`) are thin translations that call it.
 
+## Rate limiting
+
+- **Bucket** — the per-account token bucket a request is charged against. Its
+  key is `user:<id>:<surface>`; its policy is `{ capacity, refillPerSecond }`.
+- **Surface** — which of a user's two buckets a request spends: `:api` (the tier
+  quota `/pricing` sells, shared by all of the user's API keys) or `:dashboard`
+  (a flat, unadvertised ceiling for session-cookie requests). A public read of a
+  document spends the **owner's** `:api` bucket, whoever is reading.
+- **Metered** — charged one token on identity resolution. A route is metered
+  because it authenticates, not because it opted in; `/api/health` and
+  `/api/auth/**` are the only exemptions, each with a reason in
+  `tests/unit/routeCoverage.test.ts`.
+
+The design and its rejected alternatives are recorded in
+[ADR-0001](docs/adr/0001-per-account-rate-limiting.md). `lib/rateLimit.ts` is
+the swap seam: the Postgres statement and table live behind `consume()` and are
+the only storage-specific code, so a different backend is a one-file change.
+
 ## Deferred work
 
 - **Concurrency gap in the snapshot sequence.** `updateDocument` reads the
