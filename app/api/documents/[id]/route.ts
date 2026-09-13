@@ -13,15 +13,15 @@ import {
 type Ctx = { params: Promise<{ id: string }> };
 
 // GET /api/documents/:id — public documents are open; private require the owner.
-export async function GET(req: Request, ctx: Ctx) {
-  return handle(async () => {
+export const GET = withRateLimit((req: Request, ctx: Ctx) =>
+  handle(async () => {
     const { id } = await ctx.params;
     const doc = await prisma.document.findUnique({ where: { id } });
     if (!doc) throw new ApiError(404, "Document not found");
     await assertCanRead(req, doc);
     return NextResponse.json(documentResponse(doc));
-  });
-}
+  }),
+);
 
 // PUT /api/documents/:id — full replacement of json_data and/or is_public.
 export const PUT = withRateLimit((req: Request, ctx: Ctx) =>

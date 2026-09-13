@@ -34,7 +34,7 @@ Everything server-side lives in `lib/` and is consumed by thin route handlers in
 - `prisma.config.ts` — Prisma **CLI** config (migrate/studio/generate). Prisma 7 no longer accepts `url` in `schema.prisma` nor auto-loads `.env`, so this file does both. It reads `process.env.DATABASE_URL` rather than Prisma's `env()` helper on purpose: `env()` throws when the variable is missing and every CLI command loads this file, which would break `postinstall`'s `prisma generate` in an env without a `.env`.
 - `lib/http.ts` — `ApiError` (status + message), `handle()` (wraps a route body, turning thrown `ApiError`/`ZodError` into `{ detail }` JSON responses), and `parseBody()` (reads + Zod-validates the body). **Every route handler wraps its logic in `handle(async () => { ... })`** — that's the error-handling contract; don't add try/catch in routes.
 - `lib/schemas.ts` — Zod request schemas. **API field names are snake_case** (`json_data`, `is_public`, `workspace_id`) to preserve the public contract; Prisma models are camelCase. `lib/serializers.ts` maps rows → snake_case responses.
-- `lib/auth.ts` — API-key + session auth. `resolveUser(key)` (nullable, looks up the `ApiKey` table) and **`requireUser(req)`** — *dual auth* accepting either a valid `X-API-Key` or a Better Auth web-session cookie. Resource routes (documents/workspaces) use `requireUser` so the dashboard authenticates by cookie while external clients keep using keys. `requireSessionUser(headers?)` is cookie-only (account/key management).
+- `lib/auth.ts` — API-key + session auth. `resolveUser(key)` (nullable, looks up the `ApiKey` table) and **`requireUser(req)`** — *dual auth* accepting either a valid `X-API-Key` or a Better Auth web-session cookie. Resource routes (documents/workspaces) use `requireUser` so the dashboard authenticates by cookie while external clients keep using keys. `requireSessionUser(req?)` is cookie-only (account/key management). Both meter the caller: `requireUser` against the tiered `user:<id>:api` bucket, `requireSessionUser` against the flat, unadvertised `user:<id>:dashboard` bucket — so the dashboard can never spend or unlock the quota `/pricing` sells.
 - `lib/betterAuth.ts` / `lib/authClient.ts` — **Better Auth** (email/password web login). It owns the `User`/`Session`/`Account`/`Verification` tables and is mounted at `app/api/auth/[...all]/route.ts`. `getServerSession()` reads the session in Server Components; `getSessionFromHeaders(headers)` reads it from a request in route handlers.
 - `lib/apiKeys.ts` — `issueApiKey(userId, name)` mints a public API key (raw returned once, only the SHA-256 hash stored). Keys are managed from `/account` via `app/api/keys/**`.
 - `lib/plans.ts` — static subscription-plan catalog for `/pricing`. Inert: no Stripe/billing yet (a marked seam awaits the next stage).
@@ -53,13 +53,13 @@ Everything server-side lives in `lib/` and is consumed by thin route handlers in
 
 - **Versioning**: `PUT`/`PATCH` snapshot the current `jsonData` into `DocumentVersion` **before** writing and incrementing `version`, inside a `prisma.$transaction`. `PUT` replaces; `PATCH` shallow-merges (`{ ...existing, ...update }`).
 - **Template enforcement**: create/replace inside a templated workspace validates the data; `PATCH` validates the **merged** result. Uploaded schemas are checked with Ajv before being stored.
-- **Reads**: public documents are readable by anyone; private ones require the API key to resolve to the owner (`assertCanRead`).
+- **Reads**: public documents are readable by anyone; private ones require the API key to resolve to the owner (`assertCanRead`). A public read bills the **owner's** `:api` bucket (the dashboard warns about this at the public toggle); a request that resolves no identity (401/404) is never billed. Any route that meters must be wrapped in `withRateLimit` or the headers never reach the wire.
 - **Auth surfaces**: the public API uses API keys (SHA-256 hashed, never plaintext, stored in the `ApiKey` table — a user may hold several), minted and revoked from `/account` via `app/api/keys/**`. The web app uses **Better Auth** email/password sessions (httpOnly cookie); `middleware.ts` does a fast cookie-presence redirect for dashboard routes and the `(dashboard)` layout does the authoritative DB-backed check. Subscriptions/billing are scaffolded (`/pricing`, `User.tier`) but not yet wired.
 
 ### Routing notes
 
 - Routes are **plural REST** (`/api/documents`, `/api/workspaces`) — never singular; don't reintroduce singular paths.
-- `middleware.ts` applies permissive CORS to `/api/*` only.
+- `middleware.ts` applies permissive CORS to `/api/*` only, and exposes the `X-RateLimit-*` / `Retry-After` headers so browser clients can read them. `OPTIONS` is answered there and never reaches a handler, so preflights are unmetered.
 - Next 15 route context params are async: `const { id } = await ctx.params`.
 
 ## Agent skills
