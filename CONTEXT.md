@@ -47,3 +47,16 @@ This rule has exactly one owner in the code: `updateDocument` in
   the regression net. Because the rule now has one home, the fix is a one-place
   change when it becomes worth making. A comment marks the exact lines in
   `lib/documents.ts`.
+- **Better Auth's 429 speaks its own dialect.** The limiter on `/api/auth/**`
+  (configured in `lib/betterAuth.ts`) returns `{ message }` with a non-standard
+  `X-Retry-After` header, not the `{ detail, type }` + `Retry-After` contract the
+  rest of the API ratified in #41. That divergence was **accepted deliberately**
+  in #41 — it is an internal auth surface, produced inside Better Auth's router,
+  and normalising it means wrapping a vendor response. Not an oversight; the
+  target shape is known if it is ever worth doing.
+- **No credential-stuffing defences beyond the per-IP limiter.** Better Auth has
+  no account lockout; brute-force protection on sign-in is the IP+path limiter
+  and nothing else, so an attacker rotating IPs is unimpeded. Its `captcha` and
+  `haveibeenpwned` plugins are available in the installed package. This is an
+  auth threat-model decision, deliberately left out of the rate-limiting work
+  (#45) and not yet taken.
