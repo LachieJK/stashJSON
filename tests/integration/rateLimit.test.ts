@@ -322,5 +322,56 @@ describe.skipIf(!enabled)("rate limiter (DB-backed)", () => {
       // Each error still spent a token.
       expect(r404).toBe(r400 - 1);
     });
+
+    // #47: a public document is the owner's quota behind an unauthenticated
+    // URL. An anonymous reader spends the owner's `:api` tokens, so signing
+    // out unlocks no capacity; a 404 (no identity anywhere) spends nothing.
+    it("bills the owner's :api bucket for an anonymous public read", async (ctx) => {
+      if (!rawConcurrencyCapable) return ctx.skip();
+      const key = await newUserKey("owner@rl.local");
+      const docs = await import("@/app/api/documents/route");
+      const docById = await import("@/app/api/documents/[id]/route");
+      const remainingAfter = (res: Response) =>
+        Number(res.headers.get("X-RateLimit-Remaining"));
+
+      // The owner creates a public document (one token, on their own key).
+      const created = await docs.POST(
+        new Request("http://test/api/documents", {
+          method: "POST",
+          headers: jsonHeaders(key),
+          body: JSON.stringify({ json_data: { a: 1 }, is_public: true }),
+        }),
+      );
+      expect(created.status).toBe(201);
+      const { id } = (await created.json()) as { id: string };
+      const afterCreate = remainingAfter(created);
+
+      // An anonymous read: no key, no cookie. Served, and billed to the owner
+      // — the headers describe the owner's bucket, exposed to the reader.
+      const anon = await docById.GET(
+        new Request(`http://test/api/documents/${id}`),
+        { params: Promise.resolve({ id }) },
+      );
+      expect(anon.status).toBe(200);
+      expect(remainingAfter(anon)).toBe(afterCreate - 1);
+
+      // The owner's own next request sees the anonymous read's charge.
+      const own = await docById.GET(
+        new Request(`http://test/api/documents/${id}`, {
+          headers: jsonHeaders(key),
+        }),
+        { params: Promise.resolve({ id }) },
+      );
+      expect(own.status).toBe(200);
+      expect(remainingAfter(own)).toBe(afterCreate - 2);
+
+      // An anonymous 404 resolves no identity and stamps no headers.
+      const missing = await docById.GET(
+        new Request("http://test/api/documents/does-not-exist"),
+        { params: Promise.resolve({ id: "does-not-exist" }) },
+      );
+      expect(missing.status).toBe(404);
+      expect(missing.headers.get("X-RateLimit-Remaining")).toBeNull();
+    });
   });
 });

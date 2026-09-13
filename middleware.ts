@@ -5,6 +5,15 @@ import { getSessionCookie } from "better-auth/cookies";
 // Dashboard routes that require a logged-in session.
 const PROTECTED_PREFIXES = ["/dashboard", "/workspaces", "/account"];
 
+// Response headers a cross-origin browser client is allowed to read. CORS
+// exposes only the safelisted few by default, which excludes all of these.
+const EXPOSED_HEADERS = [
+  "X-RateLimit-Limit",
+  "X-RateLimit-Remaining",
+  "X-RateLimit-Reset",
+  "Retry-After",
+];
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -39,6 +48,10 @@ export function middleware(req: NextRequest) {
     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   );
   res.headers.set("Access-Control-Allow-Headers", "Content-Type, X-API-Key");
+  // Without this a cross-origin fetch() can read none of the rate-limit
+  // headers — the wire contract would be invisible to exactly the browser
+  // clients most likely to back off politely.
+  res.headers.set("Access-Control-Expose-Headers", EXPOSED_HEADERS.join(", "));
   return res;
 }
 

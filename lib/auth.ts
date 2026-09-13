@@ -3,8 +3,8 @@ import { prisma } from "@/lib/db";
 import { hashApiKey } from "@/lib/utils";
 import { ApiError } from "@/lib/http";
 import { getServerSession, getSessionFromHeaders } from "@/lib/betterAuth";
-import { consume, recordDecision } from "@/lib/rateLimit";
-import { PLANS } from "@/lib/plans";
+import { consume, recordDecision, type BucketPolicy } from "@/lib/rateLimit";
+import { DASHBOARD_POLICY, PLANS } from "@/lib/plans";
 
 /**
  * Resolve a user from a raw API key, or null if absent/unknown/revoked.
@@ -58,20 +58,34 @@ export async function requireUser(req: Request): Promise<User> {
 }
 
 /**
- * Charge one token against the caller's `user:<id>:api` bucket (all of a user's
- * keys share it) and reject with `429` when it is empty. The decision is stashed
- * so `withRateLimit` can stamp the `X-RateLimit-*` headers onto the response.
+ * Charge one token against the `user:<id>:api` bucket of `owner` — the account
+ * whose quota the request spends, which is the caller on an authenticated
+ * route and the document's owner on a public read (see `assertCanRead`). All
+ * of a user's keys share the bucket. Rejects with `429` when it is empty.
+ */
+export async function meterApi(req: Request, owner: User): Promise<void> {
+  await meter(req, `user:${owner.id}:api`, PLANS[owner.tier].policy);
+}
+
+/**
+ * Charge one token against `key` and reject with `429` when the bucket is
+ * empty. The decision is stashed so `withRateLimit` can stamp the
+ * `X-RateLimit-*` headers onto the response.
  *
  * Fail-open: a limiter error can only happen after identity resolution has
  * already made a successful DB round trip, so failing closed would buy no
  * enforcement and could turn a blip into an outage. We log and let the request
- * through. Metering lives here rather than in the nullable resolvers so an
- * unauthenticated request (which resolves no bucket) is never billed.
+ * through. Metering lives behind the identity checks rather than in the
+ * nullable resolvers so a request that resolves no bucket is never billed.
  */
-async function meterApi(req: Request, user: User): Promise<void> {
+async function meter(
+  req: Request,
+  key: string,
+  policy: BucketPolicy,
+): Promise<void> {
   let decision;
   try {
-    decision = await consume(`user:${user.id}:api`, PLANS[user.tier].policy);
+    decision = await consume(key, policy);
   } catch (err) {
     console.error("Rate limiter unavailable; failing open:", err);
     return;
@@ -82,14 +96,21 @@ async function meterApi(req: Request, user: User): Promise<void> {
 
 /**
  * Require a logged-in web session (cookie only). For account/key management.
- * Pass `req.headers` from a route handler; omit it in Server Components to read
- * the ambient request cookies.
+ * Pass the `Request` from a route handler; omit it in Server Components to
+ * read the ambient request cookies.
+ *
+ * Route-handler calls are metered against `user:<id>:dashboard`: a flat,
+ * non-tiered ceiling separate from the `:api` bucket `/pricing` sells, so a
+ * runaway dashboard can neither exhaust the tier quota nor be a way to obtain
+ * capacity it does not account for. Server Components have no response to
+ * stamp and are not metered.
  */
-export async function requireSessionUser(reqHeaders?: Headers): Promise<User> {
-  const session = reqHeaders
-    ? await getSessionFromHeaders(reqHeaders)
+export async function requireSessionUser(req?: Request): Promise<User> {
+  const session = req
+    ? await getSessionFromHeaders(req.headers)
     : await getServerSession();
   const user = await userFromSession(session);
   if (!user) throw new ApiError(401, "Authentication required");
+  if (req) await meter(req, `user:${user.id}:dashboard`, DASHBOARD_POLICY);
   return user;
 }

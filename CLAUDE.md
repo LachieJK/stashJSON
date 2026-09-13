@@ -53,13 +53,13 @@ Everything server-side lives in `lib/` and is consumed by thin route handlers in
 
 - **Versioning**: `PUT`/`PATCH` snapshot the current `jsonData` into `DocumentVersion` **before** writing and incrementing `version`, inside a `prisma.$transaction`. `PUT` replaces; `PATCH` shallow-merges (`{ ...existing, ...update }`).
 - **Template enforcement**: create/replace inside a templated workspace validates the data; `PATCH` validates the **merged** result. Uploaded schemas are checked with Ajv before being stored.
-- **Reads**: public documents are readable by anyone; private ones require the API key to resolve to the owner (`assertCanRead`).
+- **Reads**: public documents are readable by anyone; private ones require the API key to resolve to the owner (`assertCanRead`). A public read bills the **owner's** `:api` bucket (the dashboard warns about this at the public toggle); a request that resolves no identity (401/404) is never billed. Any route that meters must be wrapped in `withRateLimit` or the headers never reach the wire.
 - **Auth surfaces**: the public API uses API keys (SHA-256 hashed, never plaintext, stored in the `ApiKey` table — a user may hold several), minted and revoked from `/account` via `app/api/keys/**`. The web app uses **Better Auth** email/password sessions (httpOnly cookie); `middleware.ts` does a fast cookie-presence redirect for dashboard routes and the `(dashboard)` layout does the authoritative DB-backed check. Subscriptions/billing are scaffolded (`/pricing`, `User.tier`) but not yet wired.
 
 ### Routing notes
 
 - Routes are **plural REST** (`/api/documents`, `/api/workspaces`) — never singular; don't reintroduce singular paths.
-- `middleware.ts` applies permissive CORS to `/api/*` only.
+- `middleware.ts` applies permissive CORS to `/api/*` only, and exposes the `X-RateLimit-*` / `Retry-After` headers so browser clients can read them. `OPTIONS` is answered there and never reaches a handler, so preflights are unmetered.
 - Next 15 route context params are async: `const { id } = await ctx.params`.
 
 ## Agent skills
