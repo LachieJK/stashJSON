@@ -118,6 +118,20 @@ model Verification {
   @@map("verifications")
 }
 
+// Better Auth's per-IP rate-limit counters for /api/auth/** (`rateLimit.storage:
+// "database"` in lib/betterAuth.ts). One row per `ip|path` within the window;
+// Better Auth prunes expired rows itself. Distinct from `RateLimitBucket`, our
+// own per-account API limiter. `lastRequest` is epoch milliseconds.
+
+model AuthRateLimit {
+  id          String @id @default(uuid())
+  key         String @unique
+  count       Int
+  lastRequest BigInt @map("last_request")
+
+  @@map("auth_rate_limits")
+}
+
 model Workspace {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
