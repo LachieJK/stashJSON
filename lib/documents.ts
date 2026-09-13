@@ -2,7 +2,7 @@ import type { Document, User } from "@/prisma/generated/client";
 import { Prisma } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/http";
-import { requireUser, resolveRequestUser } from "@/lib/auth";
+import { meterApi, requireUser, resolveRequestUser } from "@/lib/auth";
 import { validateAgainstSchema } from "@/lib/templateValidator";
 
 /** Load a document that must exist and be owned by the caller. */
@@ -20,11 +20,26 @@ export async function loadOwnedDocument(
 /**
  * Authorize a read: public documents are readable by anyone; private ones
  * require the API key to resolve to the owner.
+ *
+ * A public read bills the **owner's** `:api` bucket: the document is the
+ * owner's quota behind an unauthenticated URL, so an anonymous reader spends
+ * the owner's tokens and signing out unlocks no capacity. A private read bills
+ * the caller (who, when the read succeeds, is the owner) — never the owner on
+ * the caller's say-so, or an anonymous probe of a private URL could drain it.
+ * A request that resolves no identity — a 401 here, a 404 before it — has no
+ * bucket to charge and stays free; a per-IP shield for that is out of scope.
  */
 export async function assertCanRead(req: Request, doc: Document): Promise<void> {
-  if (doc.isPublic) return;
+  if (doc.isPublic) {
+    const owner = await prisma.user.findUniqueOrThrow({
+      where: { id: doc.userId },
+    });
+    await meterApi(req, owner);
+    return;
+  }
   const user = await resolveRequestUser(req);
   if (!user) throw new ApiError(401, "Authentication required for private documents");
+  await meterApi(req, user);
   if (doc.userId !== user.id) throw new ApiError(403, "Access denied");
 }
 

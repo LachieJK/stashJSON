@@ -11,6 +11,12 @@ import {
   type WorkspaceDto,
 } from "@/lib/apiClient";
 
+// A public document is the owner's quota behind an unauthenticated URL: every
+// anonymous read spends the owner's API rate limit. Said at the control, before
+// the decision is made, not after.
+const PUBLIC_READS_NOTE =
+  "Public documents are readable by anyone, without a key — and every read counts against your API rate limit.";
+
 // Workspace detail. Auth is the session cookie (no API key passed).
 export default function WorkspacePage() {
   const params = useParams<{ id: string }>();
@@ -217,6 +223,7 @@ function DocumentsPanel({ id }: { id: string }) {
           Create document
         </button>
       </div>
+      <p className="mt-1.5 text-xs text-muted">{PUBLIC_READS_NOTE}</p>
 
       {error && <p className="notice notice-error mt-3">{error}</p>}
 
@@ -280,7 +287,11 @@ function DocumentRow({
           >
             {open ? "Hide" : "View"}
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={togglePublic}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={togglePublic}
+            title={doc.is_public ? undefined : PUBLIC_READS_NOTE}
+          >
             {doc.is_public ? "Make private" : "Make public"}
           </button>
           <button className="btn btn-danger btn-sm" onClick={remove}>
@@ -288,6 +299,9 @@ function DocumentRow({
           </button>
         </div>
       </div>
+      {!doc.is_public && (
+        <p className="mt-1.5 text-xs text-muted">{PUBLIC_READS_NOTE}</p>
+      )}
 
       {open && (
         <>

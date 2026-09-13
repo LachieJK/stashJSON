@@ -47,7 +47,7 @@ export default function DocsDocumentsPage() {
             required: false,
             in: "body",
             description:
-              "Whether anyone can read the document without credentials.",
+              "Whether anyone can read the document without credentials. Reads of a public document count against the owner's rate limit.",
           },
           {
             name: "workspace_id",
@@ -122,7 +122,7 @@ export default function DocsDocumentsPage() {
             required: false,
             in: "body",
             description:
-              "Whether anyone can read the document without credentials.",
+              "Whether anyone can read the document without credentials. Reads of a public document count against the owner's rate limit.",
           },
         ]}
         requestBody={`{
@@ -164,7 +164,7 @@ export default function DocsDocumentsPage() {
             required: false,
             in: "body",
             description:
-              "Whether anyone can read the document without credentials.",
+              "Whether anyone can read the document without credentials. Reads of a public document count against the owner's rate limit.",
           },
         ]}
         requestBody={`{
