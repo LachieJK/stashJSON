@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { handle, parseBody } from "@/lib/http";
 import { requireSessionUser } from "@/lib/auth";
 import { withRateLimit } from "@/lib/rateLimit";
-import { recordAccess, withAccessLog } from "@/lib/accessLog";
+import { recordOwnAccount, withAccessLog } from "@/lib/accessLog";
 import { apiKeyNameSchema } from "@/lib/schemas";
 import { apiKeyResponse } from "@/lib/serializers";
 import { issueApiKey, KEY_REVEAL_MESSAGE } from "@/lib/apiKeys";
@@ -14,8 +14,7 @@ export const GET = withAccessLog(
   withRateLimit((req: Request) =>
     handle(async () => {
       const user = await requireSessionUser(req);
-      // Keys are the caller's own resources: owner is the actor.
-      recordAccess(req, { ownerUserId: user.id });
+      recordOwnAccount(req, user.id);
       const keys = await prisma.apiKey.findMany({
         where: { userId: user.id, revokedAt: null },
         orderBy: { createdAt: "desc" },
@@ -31,8 +30,7 @@ export const POST = withAccessLog(
   withRateLimit((req: Request) =>
     handle(async () => {
       const user = await requireSessionUser(req);
-      // Keys are the caller's own resources: owner is the actor.
-      recordAccess(req, { ownerUserId: user.id });
+      recordOwnAccount(req, user.id);
       const { name } = await parseBody(req, apiKeyNameSchema);
       const { raw, record } = await issueApiKey(user.id, name);
       return NextResponse.json(

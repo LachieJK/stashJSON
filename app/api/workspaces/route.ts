@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { workspaceCreateSchema } from "@/lib/schemas";
 import { workspaceResponse } from "@/lib/serializers";
 import { withRateLimit } from "@/lib/rateLimit";
-import { recordAccess, withAccessLog } from "@/lib/accessLog";
+import { recordAccess, recordOwnAccount, withAccessLog } from "@/lib/accessLog";
 
 // POST /api/workspaces — create a workspace.
 export const POST = withAccessLog(
@@ -13,8 +13,7 @@ export const POST = withAccessLog(
   withRateLimit((req: Request) =>
     handle(async () => {
       const user = await requireUser(req);
-      // A create targets the caller's own account, so the owner is the actor.
-      recordAccess(req, { ownerUserId: user.id });
+      recordOwnAccount(req, user.id);
       const body = await parseBody(req, workspaceCreateSchema);
 
       const workspace = await prisma.workspace.create({
@@ -35,8 +34,7 @@ export const GET = withAccessLog(
   withRateLimit((req: Request) =>
     handle(async () => {
       const user = await requireUser(req);
-      // The listing is the caller's own collection: owner is the actor.
-      recordAccess(req, { ownerUserId: user.id });
+      recordOwnAccount(req, user.id);
 
       const workspaces = await prisma.workspace.findMany({
         where: { userId: user.id },

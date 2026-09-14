@@ -13,12 +13,15 @@ export const DELETE = withAccessLog(
   withRateLimit((req: Request, ctx: Ctx) =>
     handle(async () => {
       const user = await requireSessionUser(req);
-      // Keys are the caller's own resources: owner is the actor.
-      recordAccess(req, { ownerUserId: user.id });
       const { id } = await ctx.params;
 
+      // Someone else's key is a 404, not a 403 — key ids are not disclosed —
+      // but the log still records whose key was targeted. An unknown id
+      // records nothing: a null owner means no resource existed.
       const key = await prisma.apiKey.findUnique({ where: { id } });
-      if (!key || key.userId !== user.id) throw new ApiError(404, "API key not found");
+      if (!key) throw new ApiError(404, "API key not found");
+      recordAccess(req, { ownerUserId: key.userId });
+      if (key.userId !== user.id) throw new ApiError(404, "API key not found");
 
       if (!key.revokedAt) {
         await prisma.apiKey.update({

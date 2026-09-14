@@ -90,6 +90,17 @@ export function recordAccess(req: Request, partial: Partial<AccessFacts>): void 
   facts.set(req, { ...facts.get(req), ...partial });
 }
 
+/**
+ * Record a request against the caller's own account — a create, or a listing
+ * of their own collection — where the resource targeted is the actor's, so
+ * the owner is the actor. Only for requests that have already found their
+ * resource: a lookup that may 404 records its owner after it succeeds, never
+ * before, so a null owner keeps meaning "no resource existed".
+ */
+export function recordOwnAccount(req: Request, userId: string): void {
+  recordAccess(req, { ownerUserId: userId });
+}
+
 /** The facts recorded so far for a request, defaults filled in. Read-only. */
 export function recordedAccess(req: Request): AccessFacts {
   return { ...NO_FACTS, ...facts.get(req) };

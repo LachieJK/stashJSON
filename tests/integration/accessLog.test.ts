@@ -81,13 +81,12 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
    */
   async function entryFor(
     path: string,
-    method?: string,
-    actorUserId?: string,
+    scope: { method?: string; actorUserId?: string } = {},
   ): Promise<AccessLogRow> {
     return vi.waitFor(
       async () => {
         const rows = await prisma.accessLog.findMany({
-          where: { path, method, actorUserId },
+          where: { path, ...scope },
         });
         expect(rows).toHaveLength(1);
         return rows[0];
@@ -299,7 +298,7 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
       expect(keyRes.status).toBe(201);
       const { api_key: raw, key } = await keyRes.json();
       const userId = (await prisma.apiKey.findUniqueOrThrow({ where: { id: key.id } })).userId;
-      expect(await entryFor("/api/keys", "POST", userId)).toMatchObject({
+      expect(await entryFor("/api/keys", { method: "POST", actorUserId: userId })).toMatchObject({
         route: "/api/keys",
         status: 201,
         credential: "session",
@@ -325,7 +324,7 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
       );
       expect(wsRes.status).toBe(201);
       const ws = await wsRes.json();
-      expect(await entryFor("/api/workspaces", "POST", userId)).toMatchObject({
+      expect(await entryFor("/api/workspaces", { method: "POST", actorUserId: userId })).toMatchObject({
         ...byKey,
         route: "/api/workspaces",
         status: 201,
@@ -342,7 +341,7 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
       );
       expect(docRes.status).toBe(201);
       const doc = await docRes.json();
-      expect(await entryFor("/api/documents", "POST", userId)).toMatchObject({
+      expect(await entryFor("/api/documents", { method: "POST", actorUserId: userId })).toMatchObject({
         ...byKey,
         route: "/api/documents",
         status: 201,
@@ -363,7 +362,7 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
         ctx,
       );
       expect(put.status).toBe(200);
-      expect(await entryFor(path, "PUT")).toMatchObject({
+      expect(await entryFor(path, { method: "PUT" })).toMatchObject({
         ...onDoc,
         route: "/api/documents/[id]",
         status: 200,
@@ -378,14 +377,14 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
         ctx,
       );
       expect(patch.status).toBe(200);
-      expect(await entryFor(path, "PATCH")).toMatchObject({ ...onDoc, status: 200 });
+      expect(await entryFor(path, { method: "PATCH" })).toMatchObject({ ...onDoc, status: 200 });
 
       const list = await versions.GET(
         new Request(`http://test${path}/versions`, { headers: asOwner }),
         ctx,
       );
       expect(list.status).toBe(200);
-      expect(await entryFor(`${path}/versions`, "GET")).toMatchObject({
+      expect(await entryFor(`${path}/versions`, { method: "GET" })).toMatchObject({
         ...onDoc,
         route: "/api/documents/[id]/versions",
         status: 200,
@@ -393,14 +392,14 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
 
       const get = await byId.GET(new Request(`http://test${path}`, { headers: asOwner }), ctx);
       expect(get.status).toBe(200);
-      expect(await entryFor(path, "GET")).toMatchObject({ ...onDoc, status: 200 });
+      expect(await entryFor(path, { method: "GET" })).toMatchObject({ ...onDoc, status: 200 });
 
       const del = await byId.DELETE(
         new Request(`http://test${path}`, { method: "DELETE", headers: asOwner }),
         ctx,
       );
       expect(del.status).toBe(204);
-      expect(await entryFor(path, "DELETE")).toMatchObject({ ...onDoc, status: 204 });
+      expect(await entryFor(path, { method: "DELETE" })).toMatchObject({ ...onDoc, status: 204 });
 
       // Exactly one entry per request, and nothing else attributed to this actor.
       expect(await prisma.accessLog.count({ where: { actorUserId: userId } })).toBe(8);
@@ -423,7 +422,7 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
 
       const listed = await keys.GET(new Request("http://test/api/keys", { headers: { cookie } }));
       expect(listed.status).toBe(200);
-      expect(await entryFor("/api/keys", "GET", userId)).toMatchObject({
+      expect(await entryFor("/api/keys", { method: "GET", actorUserId: userId })).toMatchObject({
         credential: "session",
         actorUserId: userId,
         ownerUserId: userId,
@@ -436,7 +435,7 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
         { params: Promise.resolve({ id: key.id }) },
       );
       expect(revoked.status).toBe(204);
-      expect(await entryFor(`/api/keys/${key.id}`, "DELETE")).toMatchObject({
+      expect(await entryFor(`/api/keys/${key.id}`, { method: "DELETE" })).toMatchObject({
         route: "/api/keys/[id]",
         credential: "session",
         actorUserId: userId,
@@ -481,7 +480,7 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
         { params: Promise.resolve({ id: doc.id }) },
       );
       expect(res.status).toBe(403);
-      expect(await entryFor(`/api/documents/${doc.id}`, "DELETE")).toMatchObject({
+      expect(await entryFor(`/api/documents/${doc.id}`, { method: "DELETE" })).toMatchObject({
         status: 403,
         credential: "api_key",
         actorUserId: stranger.user.id,
@@ -509,7 +508,7 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
         { params: Promise.resolve({ id: unknown }) },
       );
       expect(missing.status).toBe(404);
-      expect(await entryFor(`/api/workspaces/${unknown}`, "GET")).toMatchObject({
+      expect(await entryFor(`/api/workspaces/${unknown}`, { method: "GET" })).toMatchObject({
         route: "/api/workspaces/[id]",
         status: 404,
         actorUserId: stranger.user.id,
@@ -524,12 +523,84 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
         { params: Promise.resolve({ id: ws.id }) },
       );
       expect(foreign.status).toBe(404);
-      expect(await entryFor(`/api/workspaces/${ws.id}`, "GET")).toMatchObject({
+      expect(await entryFor(`/api/workspaces/${ws.id}`, { method: "GET" })).toMatchObject({
         status: 404,
         actorUserId: stranger.user.id,
         ownerUserId: owner.user.id,
         workspaceId: ws.id,
       });
+    });
+
+    it("key 404s: unknown id has a null owner; someone else's key records its owner", async () => {
+      const cookie = await signUpSession("key404");
+      const victim = await newUser("key-victim");
+      const keyById = await import("@/app/api/keys/[id]/route");
+      const { randomUUID } = await import("node:crypto");
+      const unknown = randomUUID();
+
+      const revoke = (id: string) =>
+        keyById.DELETE(
+          new Request(`http://test/api/keys/${id}`, { method: "DELETE", headers: { cookie } }),
+          { params: Promise.resolve({ id }) },
+        );
+
+      expect((await revoke(unknown)).status).toBe(404);
+      const missing = await entryFor(`/api/keys/${unknown}`, { method: "DELETE" });
+      expect(missing).toMatchObject({ status: 404, credential: "session", ownerUserId: null });
+      expect(missing.actorUserId).not.toBeNull();
+
+      expect((await revoke(victim.keyId)).status).toBe(404);
+      expect(await entryFor(`/api/keys/${victim.keyId}`, { method: "DELETE" })).toMatchObject({
+        status: 404,
+        credential: "session",
+        ownerUserId: victim.user.id,
+      });
+      expect(
+        (await prisma.apiKey.findUniqueOrThrow({ where: { id: victim.keyId } })).revokedAt,
+      ).toBeNull();
+    });
+
+    it("document create into a workspace 404s: unknown has a null owner; someone else's records its owner", async () => {
+      const actor = await newUser("create-actor");
+      const victim = await newUser("create-victim");
+      const ws = await prisma.workspace.create({
+        data: { userId: victim.user.id, name: "Not yours" },
+      });
+      const documents = await import("@/app/api/documents/route");
+      const { randomUUID } = await import("node:crypto");
+
+      const create = (workspaceId: string) =>
+        documents.POST(
+          new Request("http://test/api/documents", {
+            method: "POST",
+            headers: jsonHeaders({ "x-api-key": actor.raw }),
+            body: JSON.stringify({ json_data: { a: 1 }, workspace_id: workspaceId }),
+          }),
+        );
+      const entries = () =>
+        prisma.accessLog.findMany({
+          where: { path: "/api/documents", method: "POST", actorUserId: actor.user.id },
+          orderBy: { at: "asc" },
+        });
+
+      expect((await create(randomUUID())).status).toBe(404);
+      await vi.waitFor(async () => expect(await entries()).toHaveLength(1));
+      expect((await entries())[0]).toMatchObject({
+        status: 404,
+        ownerUserId: null,
+        workspaceId: null,
+        documentId: null,
+      });
+
+      expect((await create(ws.id)).status).toBe(404);
+      await vi.waitFor(async () => expect(await entries()).toHaveLength(2));
+      expect((await entries())[1]).toMatchObject({
+        status: 404,
+        ownerUserId: victim.user.id,
+        workspaceId: ws.id,
+        documentId: null,
+      });
+      expect(await prisma.document.count({ where: { workspaceId: ws.id } })).toBe(0);
     });
 
     it("/api/health and /api/auth/** produce no entries", async () => {
