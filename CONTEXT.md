@@ -52,6 +52,30 @@ The design and its rejected alternatives are recorded in
 the swap seam: the Postgres statement and table live behind `consume()` and are
 the only storage-specific code, so a different backend is a one-file change.
 
+## Access log
+
+- **Access log** — the record of every request to a route StashJSON controls,
+  kept whether or not the request succeeded. An **entry** is one request. The
+  log is wider than metering: every metered request is an entry, but a request
+  that resolved no identity (a `401`, a `404` on an unknown id) is an entry too.
+  Attempted access counts as access.
+  _Avoid_: request log, hit, audit log
+- **Actor** — the user who made a request, or nobody. An entry's actor is
+  whoever the credential resolved to; an anonymous request has none.
+- **Owner** — the user whose resource a request targeted, or nobody. An entry
+  with no owner means **no resource existed** to be owned — it is never a
+  fallback to the actor. On a request against one's own resources, actor and
+  owner are the same user; on a public read or a refused read of someone else's
+  document, they differ.
+- **Credential** — how the actor was identified: an API key, a web session, or
+  none. This, not any network detail, is the log's anonymous-versus-signed-in
+  distinction.
+
+The log holds no personal data beyond user ids the system already stores — no
+IP addresses, no user agents, no bodies. That is a decision, not an omission;
+its trade-off is recorded in
+[ADR-0002](docs/adr/0002-access-log-without-personal-data.md).
+
 ## Deferred work
 
 - **Concurrency gap in the snapshot sequence.** `updateDocument` reads the
@@ -78,3 +102,21 @@ the only storage-specific code, so a different backend is a one-file change.
   `haveibeenpwned` plugins are available in the installed package. This is an
   auth threat-model decision, deliberately left out of the rate-limiting work
   (#45) and not yet taken.
+- **Tiered access-log retention.** Entries live a flat 30 days for every
+  plan. A per-tier window (7 days for FREE, 30 for PRO and above) was
+  considered and **deferred**: an entry has both an actor and an owner who may
+  be on different tiers, so "whose tier decides" is a product call that was not
+  worth taking before the log existed at all. Revisit once the dashboards read
+  it.
+- **Access-log pruning by `pg_cron`.** Old entries are pruned opportunistically
+  from application code. Neon's `pg_cron` was **deferred, not rejected**: its
+  jobs run only while the compute is active (Neon recommends it only with
+  scale-to-zero disabled), and enabling it needs an endpoint API call plus a
+  compute restart, so it cannot live in a Prisma migration. Switch once the
+  compute no longer scales to zero.
+- **Rollups over the access log.** Aggregate tables for date ranges beyond the
+  raw retention window are not built. Their shape should be driven by the
+  queries real dashboards make, not guessed in advance.
+- **Sign-in attack statistics.** `/api/auth/**` is Better Auth's router and is
+  outside the access log, for the same reason it is outside our rate limiter.
+  Stats on failed sign-ins would have to come from Better Auth's own hooks.
