@@ -3,6 +3,7 @@ import { Prisma } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/http";
 import { meterApi, requireUser, resolveRequestUser } from "@/lib/auth";
+import { recordAccess } from "@/lib/accessLog";
 import { validateAgainstSchema } from "@/lib/templateValidator";
 
 /** Load a document that must exist and be owned by the caller. */
@@ -28,12 +29,25 @@ export async function loadOwnedDocument(
  * the caller's say-so, or an anonymous probe of a private URL could drain it.
  * A request that resolves no identity — a 401 here, a 404 before it — has no
  * bucket to charge and stays free; a per-IP shield for that is out of scope.
+ *
+ * The access log is wider than the metering: every outcome below is an entry
+ * with the document's owner as **owner**, recorded before anything can refuse
+ * the read so a 401 or 429 still says whose resource was targeted. The
+ * **actor** is whoever the credential resolves to — on a public read that
+ * identity is consulted purely for the log (one keyHash lookup a public read
+ * did not previously pay); the bill still goes to the owner.
  */
 export async function assertCanRead(req: Request, doc: Document): Promise<void> {
+  recordAccess(req, {
+    ownerUserId: doc.userId,
+    documentId: doc.id,
+    workspaceId: doc.workspaceId,
+  });
   if (doc.isPublic) {
     const owner = await prisma.user.findUniqueOrThrow({
       where: { id: doc.userId },
     });
+    await resolveRequestUser(req);
     await meterApi(req, owner);
     return;
   }

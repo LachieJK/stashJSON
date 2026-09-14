@@ -29,11 +29,15 @@ model User {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  workspaces Workspace[]
-  documents  Document[]
-  apiKeys    ApiKey[]
-  sessions   Session[]
-  accounts   Account[]
+  workspaces    Workspace[]
+  documents     Document[]
+  apiKeys       ApiKey[]
+  sessions      Session[]
+  accounts      Account[]
+  // Access-log entries this user made (actor) and entries against this
+  // user's resources (owner) — see the AccessLog model for why the two differ.
+  accessesMade  AccessLog[] @relation("AccessLogActor")
+  accessesOwned AccessLog[] @relation("AccessLogOwner")
 
   @@map("users")
 }
@@ -205,4 +209,49 @@ model DocumentVersion {
 
   @@index([documentId])
   @@map("document_versions")
+}
+
+// --- Access log (ADR-0002) ---------------------------------------------------
+//
+// One entry per request to a route we control, written after the response
+// (see lib/accessLog.ts). Holds no personal data beyond user ids: no IP, user
+// agent, body, header, query string or key. Two nullable identities: `actor`
+// is who made the request, `owner` is whose resource it targeted; a null owner
+// means no resource existed, never a fallback to the actor. Owner rows cascade
+// with the owner; actor rows are set null when the actor is deleted, so an
+// owner's history never shrinks because someone else left. `apiKeyId`,
+// `documentId` and `workspaceId` are snapshots with no FK: deleting a document
+// must not erase the evidence that it was being probed.
+
+// How an entry's actor was identified. `none` is the anonymous case.
+enum Credential {
+  api_key
+  session
+  none
+}
+
+model AccessLog {
+  id          String     @id @default(uuid())
+  at          DateTime   @default(now()) @db.Timestamptz(6)
+  method      String
+  // The route pattern as exported (`/api/documents/[id]`), for grouping.
+  route       String
+  // The actual path requested, bounded in length; never the query string.
+  path        String
+  status      Int
+  durationMs  Int        @map("duration_ms")
+  credential  Credential
+  actorUserId String?    @map("actor_user_id")
+  ownerUserId String?    @map("owner_user_id")
+  apiKeyId    String?    @map("api_key_id")
+  documentId  String?    @map("document_id")
+  workspaceId String?    @map("workspace_id")
+
+  actor User? @relation("AccessLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  owner User? @relation("AccessLogOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@index([at])
+  @@index([ownerUserId, at])
+  @@index([actorUserId, at])
+  @@map("access_logs")
 }

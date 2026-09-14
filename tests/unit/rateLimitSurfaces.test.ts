@@ -140,9 +140,27 @@ describe("public-document reads", () => {
       `user:${owner.id}:api`,
       PLANS[owner.tier].policy,
     );
-    // The reader's identity was never even consulted.
+    // The reader's identity is consulted — for the access log's actor only —
+    // but the anonymous reader had none, and the owner is who was billed.
+    expect(getSessionFromHeaders).toHaveBeenCalledTimes(1);
     expect(findUniqueApiKey).not.toHaveBeenCalled();
-    expect(getSessionFromHeaders).not.toHaveBeenCalled();
+  });
+
+  it("record the owner and resource for the log even on an anonymous read", async () => {
+    const { assertCanRead } = await import("@/lib/documents");
+    const { recordedAccess } = await import("@/lib/accessLog");
+    const req = new Request("http://test/api/documents/doc-1");
+
+    await assertCanRead(req, doc(true));
+
+    expect(recordedAccess(req)).toEqual({
+      credential: "none",
+      actorUserId: null,
+      ownerUserId: owner.id,
+      apiKeyId: null,
+      documentId: "doc-1",
+      workspaceId: null,
+    });
   });
 
   it("refuse the read as 429 when the owner's bucket is empty", async () => {
