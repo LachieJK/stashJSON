@@ -4,15 +4,17 @@ import { hashApiKey } from "@/lib/utils";
 import { ApiError } from "@/lib/http";
 import { getServerSession, getSessionFromHeaders } from "@/lib/betterAuth";
 import { consume, recordDecision, type BucketPolicy } from "@/lib/rateLimit";
+import { recordAccess } from "@/lib/accessLog";
 import { DASHBOARD_POLICY, PLANS } from "@/lib/plans";
 
 /**
- * Resolve a user from a raw API key, or null if absent/unknown/revoked.
- * Bumps `lastUsedAt` best-effort so revocation and usage tracking work.
+ * Resolve a user from a raw API key — with the key's id, which the access log
+ * snapshots — or null if absent/unknown/revoked. Bumps `lastUsedAt`
+ * best-effort so revocation and usage tracking work.
  */
 export async function resolveUser(
   apiKey: string | null | undefined,
-): Promise<User | null> {
+): Promise<{ user: User; keyId: string } | null> {
   if (!apiKey) return null;
   const key = await prisma.apiKey.findUnique({
     where: { keyHash: hashApiKey(apiKey) },
@@ -23,7 +25,7 @@ export async function resolveUser(
   void prisma.apiKey
     .update({ where: { id: key.id }, data: { lastUsedAt: new Date() } })
     .catch(() => {});
-  return key.user;
+  return { user: key.user, keyId: key.id };
 }
 
 /** Resolve the user from a Better Auth session, given the session object. */
@@ -39,11 +41,26 @@ async function userFromSession(
  * (programmatic clients) OR a Better Auth web session cookie (dashboard).
  * Reads the session from `req.headers` so it works in tests too. Returns null
  * when neither is present/valid.
+ *
+ * This is where the access log learns its actor and credential: a resolved
+ * identity is recorded here, once, whichever guard asked for it. A request
+ * that resolves nobody records nothing and stays `none`.
  */
 export async function resolveRequestUser(req: Request): Promise<User | null> {
   const apiKey = req.headers.get("x-api-key");
-  if (apiKey) return resolveUser(apiKey);
-  return userFromSession(await getSessionFromHeaders(req.headers));
+  if (apiKey) {
+    const resolved = await resolveUser(apiKey);
+    if (!resolved) return null;
+    recordAccess(req, {
+      credential: "api_key",
+      actorUserId: resolved.user.id,
+      apiKeyId: resolved.keyId,
+    });
+    return resolved.user;
+  }
+  const user = await userFromSession(await getSessionFromHeaders(req.headers));
+  if (user) recordAccess(req, { credential: "session", actorUserId: user.id });
+  return user;
 }
 
 /**

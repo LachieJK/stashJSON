@@ -1,9 +1,11 @@
 # ADR-0002: An access log that stores no personal data
 
 **Status:** Accepted (2026-09-14)
-**Code:** none yet — this record precedes the implementation. When it lands:
-the `AccessLog` model in `prisma/schema.prisma`, the writer and wrapper in
-`lib/`, and `tests/unit/routeCoverage.test.ts` extended to require it.
+**Code:** the `AccessLog` model in `prisma/schema.prisma`; `lib/accessLog.ts`
+(the `recordAccess` stash and the `withAccessLog` wrapper), with facts recorded
+in `resolveRequestUser` (`lib/auth.ts`) and `assertCanRead` (`lib/documents.ts`).
+Wired on `GET /api/documents/[id]` first; the fan-out to every route, and
+`tests/unit/routeCoverage.test.ts` extended to require the wrapper, follow.
 **Glossary:** *Access log*, *Actor*, *Owner*, *Credential* in [`CONTEXT.md`](../../CONTEXT.md)
 
 ## Context

@@ -4,6 +4,7 @@ import { ApiError, handle, parseBody } from "@/lib/http";
 import { documentUpdateSchema } from "@/lib/schemas";
 import { documentResponse } from "@/lib/serializers";
 import { withRateLimit } from "@/lib/rateLimit";
+import { withAccessLog } from "@/lib/accessLog";
 import {
   assertCanRead,
   loadOwnedDocument,
@@ -13,14 +14,18 @@ import {
 type Ctx = { params: Promise<{ id: string }> };
 
 // GET /api/documents/:id — public documents are open; private require the owner.
-export const GET = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    const doc = await prisma.document.findUnique({ where: { id } });
-    if (!doc) throw new ApiError(404, "Document not found");
-    await assertCanRead(req, doc);
-    return NextResponse.json(documentResponse(doc));
-  }),
+// Access-logged outermost so a rebuilt 429 is recorded with its final status.
+export const GET = withAccessLog(
+  "/api/documents/[id]",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      const doc = await prisma.document.findUnique({ where: { id } });
+      if (!doc) throw new ApiError(404, "Document not found");
+      await assertCanRead(req, doc);
+      return NextResponse.json(documentResponse(doc));
+    }),
+  ),
 );
 
 // PUT /api/documents/:id — full replacement of json_data and/or is_public.

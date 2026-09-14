@@ -139,8 +139,13 @@ describe("every /api route is metered or exempt with a reason", () => {
 
       it("wraps every handler in withRateLimit so the headers reach the wire", () => {
         for (const method of methods) {
+          // `withAccessLog("<route>", …)` may sit outside it — it must, to log
+          // a rebuilt 429's final status — but is not yet required here.
           expect(
-            new RegExp(`export\\s+const\\s+${method}\\s*=\\s*withRateLimit\\(`).test(src),
+            new RegExp(
+              `export\\s+const\\s+${method}\\s*=\\s*` +
+                `(?:withAccessLog\\(\\s*"[^"]+",\\s*)?withRateLimit\\(`,
+            ).test(src),
             `${file}: ${method} is not wrapped in withRateLimit`,
           ).toBe(true);
         }
