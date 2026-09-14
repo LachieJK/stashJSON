@@ -7,59 +7,69 @@ import { templateResponse } from "@/lib/serializers";
 import { isValidJsonSchema } from "@/lib/templateValidator";
 import { loadOwnedWorkspace } from "@/lib/workspaces";
 import { withRateLimit } from "@/lib/rateLimit";
+import { withAccessLog } from "@/lib/accessLog";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 // PUT /api/workspaces/:id/template — create or replace the workspace's schema.
-export const PUT = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    await loadOwnedWorkspace(req, id);
-    const body = await parseBody(req, workspaceTemplateSchema);
+export const PUT = withAccessLog(
+  "/api/workspaces/[id]/template",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      await loadOwnedWorkspace(req, id);
+      const body = await parseBody(req, workspaceTemplateSchema);
 
-    const check = isValidJsonSchema(body.json_schema);
-    if (!check.valid) {
-      throw new ApiError(400, `Invalid JSON Schema: ${check.error}`);
-    }
+      const check = isValidJsonSchema(body.json_schema);
+      if (!check.valid) {
+        throw new ApiError(400, `Invalid JSON Schema: ${check.error}`);
+      }
 
-    const template = await prisma.workspaceTemplate.upsert({
-      where: { workspaceId: id },
-      create: {
-        workspaceId: id,
-        jsonSchema: body.json_schema as Prisma.InputJsonValue,
-      },
-      update: { jsonSchema: body.json_schema as Prisma.InputJsonValue },
-    });
-    return NextResponse.json(templateResponse(template));
-  }),
+      const template = await prisma.workspaceTemplate.upsert({
+        where: { workspaceId: id },
+        create: {
+          workspaceId: id,
+          jsonSchema: body.json_schema as Prisma.InputJsonValue,
+        },
+        update: { jsonSchema: body.json_schema as Prisma.InputJsonValue },
+      });
+      return NextResponse.json(templateResponse(template));
+    }),
+  ),
 );
 
 // GET /api/workspaces/:id/template
-export const GET = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    await loadOwnedWorkspace(req, id);
+export const GET = withAccessLog(
+  "/api/workspaces/[id]/template",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      await loadOwnedWorkspace(req, id);
 
-    const template = await prisma.workspaceTemplate.findUnique({
-      where: { workspaceId: id },
-    });
-    if (!template) throw new ApiError(404, "Workspace template not found");
-    return NextResponse.json(templateResponse(template));
-  }),
+      const template = await prisma.workspaceTemplate.findUnique({
+        where: { workspaceId: id },
+      });
+      if (!template) throw new ApiError(404, "Workspace template not found");
+      return NextResponse.json(templateResponse(template));
+    }),
+  ),
 );
 
 // DELETE /api/workspaces/:id/template
-export const DELETE = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    await loadOwnedWorkspace(req, id);
+export const DELETE = withAccessLog(
+  "/api/workspaces/[id]/template",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      await loadOwnedWorkspace(req, id);
 
-    const template = await prisma.workspaceTemplate.findUnique({
-      where: { workspaceId: id },
-    });
-    if (!template) throw new ApiError(404, "Workspace template not found");
+      const template = await prisma.workspaceTemplate.findUnique({
+        where: { workspaceId: id },
+      });
+      if (!template) throw new ApiError(404, "Workspace template not found");
 
-    await prisma.workspaceTemplate.delete({ where: { workspaceId: id } });
-    return new NextResponse(null, { status: 204 });
-  }),
+      await prisma.workspaceTemplate.delete({ where: { workspaceId: id } });
+      return new NextResponse(null, { status: 204 });
+    }),
+  ),
 );

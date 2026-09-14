@@ -6,7 +6,13 @@ import { meterApi, requireUser, resolveRequestUser } from "@/lib/auth";
 import { recordAccess } from "@/lib/accessLog";
 import { validateAgainstSchema } from "@/lib/templateValidator";
 
-/** Load a document that must exist and be owned by the caller. */
+/**
+ * Load a document that must exist and be owned by the caller.
+ *
+ * The access log learns the owner and the resource here, before the ownership
+ * check, so a refused (403) write still records whose document was targeted.
+ * A 404 records nothing: a null owner means no resource existed.
+ */
 export async function loadOwnedDocument(
   req: Request,
   id: string,
@@ -14,6 +20,11 @@ export async function loadOwnedDocument(
   const user = await requireUser(req);
   const doc = await prisma.document.findUnique({ where: { id } });
   if (!doc) throw new ApiError(404, "Document not found");
+  recordAccess(req, {
+    ownerUserId: doc.userId,
+    documentId: doc.id,
+    workspaceId: doc.workspaceId,
+  });
   if (doc.userId !== user.id) throw new ApiError(403, "Access denied");
   return { user, doc };
 }

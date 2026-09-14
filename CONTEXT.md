@@ -70,6 +70,10 @@ the only storage-specific code, so a different backend is a one-file change.
 - **Credential** — how the actor was identified: an API key, a web session, or
   none. This, not any network detail, is the log's anonymous-versus-signed-in
   distinction.
+- **Logged** — leaves an entry. Like *metered*, a route is logged by default,
+  not by opting in: every `app/api/**/route.ts` except the limiter's two
+  exemptions is wrapped, and `tests/unit/routeCoverage.test.ts` fails one that
+  is not.
 
 The log holds no personal data beyond user ids the system already stores — no
 IP addresses, no user agents, no bodies. That is a decision, not an omission;

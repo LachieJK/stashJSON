@@ -5,54 +5,64 @@ import { workspaceUpdateSchema } from "@/lib/schemas";
 import { workspaceResponse } from "@/lib/serializers";
 import { loadOwnedWorkspace } from "@/lib/workspaces";
 import { withRateLimit } from "@/lib/rateLimit";
+import { withAccessLog } from "@/lib/accessLog";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 // GET /api/workspaces/:id
-export const GET = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    const { workspace } = await loadOwnedWorkspace(req, id);
-    const [documentCount, template] = await Promise.all([
-      prisma.document.count({ where: { workspaceId: id } }),
-      prisma.workspaceTemplate.findUnique({ where: { workspaceId: id } }),
-    ]);
-    return NextResponse.json(
-      workspaceResponse(workspace, {
-        documentCount,
-        hasTemplate: template !== null,
-      }),
-    );
-  }),
+export const GET = withAccessLog(
+  "/api/workspaces/[id]",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      const { workspace } = await loadOwnedWorkspace(req, id);
+      const [documentCount, template] = await Promise.all([
+        prisma.document.count({ where: { workspaceId: id } }),
+        prisma.workspaceTemplate.findUnique({ where: { workspaceId: id } }),
+      ]);
+      return NextResponse.json(
+        workspaceResponse(workspace, {
+          documentCount,
+          hasTemplate: template !== null,
+        }),
+      );
+    }),
+  ),
 );
 
 // PUT /api/workspaces/:id — rename.
-export const PUT = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    await loadOwnedWorkspace(req, id);
-    const body = await parseBody(req, workspaceUpdateSchema);
+export const PUT = withAccessLog(
+  "/api/workspaces/[id]",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      await loadOwnedWorkspace(req, id);
+      const body = await parseBody(req, workspaceUpdateSchema);
 
-    const workspace = await prisma.workspace.update({
-      where: { id },
-      data: { name: body.name },
-    });
-    const documentCount = await prisma.document.count({
-      where: { workspaceId: id },
-    });
-    return NextResponse.json(
-      workspaceResponse(workspace, { documentCount }),
-    );
-  }),
+      const workspace = await prisma.workspace.update({
+        where: { id },
+        data: { name: body.name },
+      });
+      const documentCount = await prisma.document.count({
+        where: { workspaceId: id },
+      });
+      return NextResponse.json(
+        workspaceResponse(workspace, { documentCount }),
+      );
+    }),
+  ),
 );
 
 // DELETE /api/workspaces/:id — documents survive (their workspace_id is nulled
 // by the SetNull relation); the template is cascade-deleted.
-export const DELETE = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    await loadOwnedWorkspace(req, id);
-    await prisma.workspace.delete({ where: { id } });
-    return new NextResponse(null, { status: 204 });
-  }),
+export const DELETE = withAccessLog(
+  "/api/workspaces/[id]",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      await loadOwnedWorkspace(req, id);
+      await prisma.workspace.delete({ where: { id } });
+      return new NextResponse(null, { status: 204 });
+    }),
+  ),
 );

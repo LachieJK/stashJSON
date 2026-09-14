@@ -74,16 +74,53 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
       { params: Promise.resolve({ id }) },
     );
 
-  /** The single entry written for a path, once it has landed. */
-  async function entryFor(path: string): Promise<AccessLogRow> {
+  /**
+   * The single entry written for a path (and method), once it has landed.
+   * Test files share the database and now every route logs, so a lookup on a
+   * path without an id in it (`/api/keys`) must also be scoped to its actor.
+   */
+  async function entryFor(
+    path: string,
+    method?: string,
+    actorUserId?: string,
+  ): Promise<AccessLogRow> {
     return vi.waitFor(
       async () => {
-        const rows = await prisma.accessLog.findMany({ where: { path } });
+        const rows = await prisma.accessLog.findMany({
+          where: { path, method, actorUserId },
+        });
         expect(rows).toHaveLength(1);
         return rows[0];
       },
       { timeout: 2000, interval: 25 },
     );
+  }
+
+  const jsonHeaders = (extra: Record<string, string> = {}) => ({
+    "content-type": "application/json",
+    ...extra,
+  });
+
+  /** Sign up through Better Auth and return the session cookie header. */
+  async function signUpSession(label: string): Promise<string> {
+    const { randomUUID } = await import("node:crypto");
+    const { POST } = await import("@/app/api/auth/[...all]/route");
+    const email = `al_${label}_${randomUUID()}@stashjson.local`;
+    const res = await POST(
+      new Request("http://test/api/auth/sign-up/email", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ email, password: "sup3r-secret-pw", name: label }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const cookie = res.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0])
+      .join("; ");
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    createdUserIds.push(user.id);
+    return cookie;
   }
 
   /** Empty a user's `:api` bucket so their next metered request is a 429. */
@@ -240,6 +277,274 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
     expect(serialised).not.toContain("should=not");
     expect(serialised).not.toContain(owner.raw);
     expect(entry.path).toBe(`/api/documents/${doc.id}`);
+  });
+
+  describe("every non-exempt route leaves one entry per request", () => {
+    it("the full flow: key → workspace → document → update → versions → read → delete", async () => {
+      const cookie = await signUpSession("flow");
+      const keys = await import("@/app/api/keys/route");
+      const workspaces = await import("@/app/api/workspaces/route");
+      const documents = await import("@/app/api/documents/route");
+      const byId = await import("@/app/api/documents/[id]/route");
+      const versions = await import("@/app/api/documents/[id]/versions/route");
+
+      // Issue the key from the dashboard: a session request, no key id.
+      const keyRes = await keys.POST(
+        new Request("http://test/api/keys", {
+          method: "POST",
+          headers: jsonHeaders({ cookie }),
+          body: JSON.stringify({ name: "flow" }),
+        }),
+      );
+      expect(keyRes.status).toBe(201);
+      const { api_key: raw, key } = await keyRes.json();
+      const userId = (await prisma.apiKey.findUniqueOrThrow({ where: { id: key.id } })).userId;
+      expect(await entryFor("/api/keys", "POST", userId)).toMatchObject({
+        route: "/api/keys",
+        status: 201,
+        credential: "session",
+        actorUserId: userId,
+        ownerUserId: userId,
+        apiKeyId: null,
+      });
+
+      const asOwner = jsonHeaders({ "x-api-key": raw });
+      const byKey = {
+        credential: "api_key",
+        actorUserId: userId,
+        ownerUserId: userId,
+        apiKeyId: key.id,
+      };
+
+      const wsRes = await workspaces.POST(
+        new Request("http://test/api/workspaces", {
+          method: "POST",
+          headers: asOwner,
+          body: JSON.stringify({ name: "Flow" }),
+        }),
+      );
+      expect(wsRes.status).toBe(201);
+      const ws = await wsRes.json();
+      expect(await entryFor("/api/workspaces", "POST", userId)).toMatchObject({
+        ...byKey,
+        route: "/api/workspaces",
+        status: 201,
+        workspaceId: ws.id,
+        documentId: null,
+      });
+
+      const docRes = await documents.POST(
+        new Request("http://test/api/documents", {
+          method: "POST",
+          headers: asOwner,
+          body: JSON.stringify({ json_data: { v: 1 }, workspace_id: ws.id }),
+        }),
+      );
+      expect(docRes.status).toBe(201);
+      const doc = await docRes.json();
+      expect(await entryFor("/api/documents", "POST", userId)).toMatchObject({
+        ...byKey,
+        route: "/api/documents",
+        status: 201,
+        documentId: doc.id,
+        workspaceId: ws.id,
+      });
+
+      const path = `/api/documents/${doc.id}`;
+      const ctx = { params: Promise.resolve({ id: doc.id }) };
+      const onDoc = { ...byKey, documentId: doc.id, workspaceId: ws.id };
+
+      const put = await byId.PUT(
+        new Request(`http://test${path}`, {
+          method: "PUT",
+          headers: asOwner,
+          body: JSON.stringify({ json_data: { v: 2 } }),
+        }),
+        ctx,
+      );
+      expect(put.status).toBe(200);
+      expect(await entryFor(path, "PUT")).toMatchObject({
+        ...onDoc,
+        route: "/api/documents/[id]",
+        status: 200,
+      });
+
+      const patch = await byId.PATCH(
+        new Request(`http://test${path}`, {
+          method: "PATCH",
+          headers: asOwner,
+          body: JSON.stringify({ json_data: { w: 3 } }),
+        }),
+        ctx,
+      );
+      expect(patch.status).toBe(200);
+      expect(await entryFor(path, "PATCH")).toMatchObject({ ...onDoc, status: 200 });
+
+      const list = await versions.GET(
+        new Request(`http://test${path}/versions`, { headers: asOwner }),
+        ctx,
+      );
+      expect(list.status).toBe(200);
+      expect(await entryFor(`${path}/versions`, "GET")).toMatchObject({
+        ...onDoc,
+        route: "/api/documents/[id]/versions",
+        status: 200,
+      });
+
+      const get = await byId.GET(new Request(`http://test${path}`, { headers: asOwner }), ctx);
+      expect(get.status).toBe(200);
+      expect(await entryFor(path, "GET")).toMatchObject({ ...onDoc, status: 200 });
+
+      const del = await byId.DELETE(
+        new Request(`http://test${path}`, { method: "DELETE", headers: asOwner }),
+        ctx,
+      );
+      expect(del.status).toBe(204);
+      expect(await entryFor(path, "DELETE")).toMatchObject({ ...onDoc, status: 204 });
+
+      // Exactly one entry per request, and nothing else attributed to this actor.
+      expect(await prisma.accessLog.count({ where: { actorUserId: userId } })).toBe(8);
+    });
+
+    it("dashboard key management by session cookie: credential session, no key id", async () => {
+      const cookie = await signUpSession("dash");
+      const keys = await import("@/app/api/keys/route");
+      const keyById = await import("@/app/api/keys/[id]/route");
+
+      const created = await keys.POST(
+        new Request("http://test/api/keys", {
+          method: "POST",
+          headers: jsonHeaders({ cookie }),
+          body: JSON.stringify({ name: "dash" }),
+        }),
+      );
+      const { key } = await created.json();
+      const userId = (await prisma.apiKey.findUniqueOrThrow({ where: { id: key.id } })).userId;
+
+      const listed = await keys.GET(new Request("http://test/api/keys", { headers: { cookie } }));
+      expect(listed.status).toBe(200);
+      expect(await entryFor("/api/keys", "GET", userId)).toMatchObject({
+        credential: "session",
+        actorUserId: userId,
+        ownerUserId: userId,
+        apiKeyId: null,
+        status: 200,
+      });
+
+      const revoked = await keyById.DELETE(
+        new Request(`http://test/api/keys/${key.id}`, { method: "DELETE", headers: { cookie } }),
+        { params: Promise.resolve({ id: key.id }) },
+      );
+      expect(revoked.status).toBe(204);
+      expect(await entryFor(`/api/keys/${key.id}`, "DELETE")).toMatchObject({
+        route: "/api/keys/[id]",
+        credential: "session",
+        actorUserId: userId,
+        apiKeyId: null,
+        status: 204,
+      });
+
+      // No cookie at all: a 401 is still an entry, with nobody identified.
+      // Anonymous, so there is no actor to scope by: bound it by time instead
+      // (other files' anonymous 401s on this path have the same shape anyway).
+      const since = new Date();
+      const anon = await keys.GET(new Request("http://test/api/keys"));
+      expect(anon.status).toBe(401);
+      const entries = await vi.waitFor(async () => {
+        const rows = await prisma.accessLog.findMany({
+          where: { path: "/api/keys", method: "GET", status: 401, at: { gte: since } },
+        });
+        expect(rows.length).toBeGreaterThanOrEqual(1);
+        return rows;
+      });
+      for (const entry of entries) {
+        expect(entry).toMatchObject({
+          credential: "none",
+          actorUserId: null,
+          ownerUserId: null,
+          apiKeyId: null,
+        });
+      }
+    });
+
+    it("a stranger's refused write (403) records the owner and the stranger as actor", async () => {
+      const owner = await newUser("w-owner");
+      const stranger = await newUser("w-stranger");
+      const doc = await newDocument(owner.user.id, false);
+      const byId = await import("@/app/api/documents/[id]/route");
+
+      const res = await byId.DELETE(
+        new Request(`http://test/api/documents/${doc.id}`, {
+          method: "DELETE",
+          headers: { "x-api-key": stranger.raw },
+        }),
+        { params: Promise.resolve({ id: doc.id }) },
+      );
+      expect(res.status).toBe(403);
+      expect(await entryFor(`/api/documents/${doc.id}`, "DELETE")).toMatchObject({
+        status: 403,
+        credential: "api_key",
+        actorUserId: stranger.user.id,
+        apiKeyId: stranger.keyId,
+        ownerUserId: owner.user.id,
+        documentId: doc.id,
+        workspaceId: doc.workspaceId,
+      });
+    });
+
+    it("workspace 404s: unknown id has a null owner; someone else's records its owner", async () => {
+      const owner = await newUser("ws-owner");
+      const stranger = await newUser("ws-stranger");
+      const ws = await prisma.workspace.create({
+        data: { userId: owner.user.id, name: "Not yours" },
+      });
+      const byId = await import("@/app/api/workspaces/[id]/route");
+      const { randomUUID } = await import("node:crypto");
+      const unknown = randomUUID();
+
+      const missing = await byId.GET(
+        new Request(`http://test/api/workspaces/${unknown}`, {
+          headers: { "x-api-key": stranger.raw },
+        }),
+        { params: Promise.resolve({ id: unknown }) },
+      );
+      expect(missing.status).toBe(404);
+      expect(await entryFor(`/api/workspaces/${unknown}`, "GET")).toMatchObject({
+        route: "/api/workspaces/[id]",
+        status: 404,
+        actorUserId: stranger.user.id,
+        ownerUserId: null,
+        workspaceId: null,
+      });
+
+      const foreign = await byId.GET(
+        new Request(`http://test/api/workspaces/${ws.id}`, {
+          headers: { "x-api-key": stranger.raw },
+        }),
+        { params: Promise.resolve({ id: ws.id }) },
+      );
+      expect(foreign.status).toBe(404);
+      expect(await entryFor(`/api/workspaces/${ws.id}`, "GET")).toMatchObject({
+        status: 404,
+        actorUserId: stranger.user.id,
+        ownerUserId: owner.user.id,
+        workspaceId: ws.id,
+      });
+    });
+
+    it("/api/health and /api/auth/** produce no entries", async () => {
+      const health = await import("@/app/api/health/route");
+      expect((await health.GET()).status).toBe(200);
+      await signUpSession("exempt");
+
+      // Give a stray write every chance to land before asserting its absence.
+      await new Promise((r) => setTimeout(r, 200));
+      expect(
+        await prisma.accessLog.count({
+          where: { OR: [{ path: "/api/health" }, { path: { startsWith: "/api/auth/" } }] },
+        }),
+      ).toBe(0);
+    });
   });
 
   describe("pruning", () => {

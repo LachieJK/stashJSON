@@ -29,41 +29,50 @@ export const GET = withAccessLog(
 );
 
 // PUT /api/documents/:id — full replacement of json_data and/or is_public.
-export const PUT = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    const { doc } = await loadOwnedDocument(req, id);
-    const body = await parseBody(req, documentUpdateSchema);
-    const updated = await updateDocument(doc, {
-      mode: "replace",
-      data: body.json_data,
-      isPublic: body.is_public,
-    });
-    return NextResponse.json(documentResponse(updated));
-  }),
+export const PUT = withAccessLog(
+  "/api/documents/[id]",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      const { doc } = await loadOwnedDocument(req, id);
+      const body = await parseBody(req, documentUpdateSchema);
+      const updated = await updateDocument(doc, {
+        mode: "replace",
+        data: body.json_data,
+        isPublic: body.is_public,
+      });
+      return NextResponse.json(documentResponse(updated));
+    }),
+  ),
 );
 
 // PATCH /api/documents/:id — shallow-merge json_data into the existing data.
-export const PATCH = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    const { doc } = await loadOwnedDocument(req, id);
-    const body = await parseBody(req, documentUpdateSchema);
-    const updated = await updateDocument(doc, {
-      mode: "merge",
-      data: body.json_data,
-      isPublic: body.is_public,
-    });
-    return NextResponse.json(documentResponse(updated));
-  }),
+export const PATCH = withAccessLog(
+  "/api/documents/[id]",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      const { doc } = await loadOwnedDocument(req, id);
+      const body = await parseBody(req, documentUpdateSchema);
+      const updated = await updateDocument(doc, {
+        mode: "merge",
+        data: body.json_data,
+        isPublic: body.is_public,
+      });
+      return NextResponse.json(documentResponse(updated));
+    }),
+  ),
 );
 
 // DELETE /api/documents/:id — owner only.
-export const DELETE = withRateLimit((req: Request, ctx: Ctx) =>
-  handle(async () => {
-    const { id } = await ctx.params;
-    const { doc } = await loadOwnedDocument(req, id);
-    await prisma.document.delete({ where: { id: doc.id } });
-    return new NextResponse(null, { status: 204 });
-  }),
+export const DELETE = withAccessLog(
+  "/api/documents/[id]",
+  withRateLimit((req: Request, ctx: Ctx) =>
+    handle(async () => {
+      const { id } = await ctx.params;
+      const { doc } = await loadOwnedDocument(req, id);
+      await prisma.document.delete({ where: { id: doc.id } });
+      return new NextResponse(null, { status: 204 });
+    }),
+  ),
 );

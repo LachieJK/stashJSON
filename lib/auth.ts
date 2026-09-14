@@ -120,7 +120,8 @@ async function meter(
  * non-tiered ceiling separate from the `:api` bucket `/pricing` sells, so a
  * runaway dashboard can neither exhaust the tier quota nor be a way to obtain
  * capacity it does not account for. Server Components have no response to
- * stamp and are not metered.
+ * stamp and are not metered — nor logged: only a route handler leaves an
+ * access-log entry, so only the `req` form records the session actor.
  */
 export async function requireSessionUser(req?: Request): Promise<User> {
   const session = req
@@ -128,6 +129,9 @@ export async function requireSessionUser(req?: Request): Promise<User> {
     : await getServerSession();
   const user = await userFromSession(session);
   if (!user) throw new ApiError(401, "Authentication required");
-  if (req) await meter(req, `user:${user.id}:dashboard`, DASHBOARD_POLICY);
+  if (req) {
+    recordAccess(req, { credential: "session", actorUserId: user.id });
+    await meter(req, `user:${user.id}:dashboard`, DASHBOARD_POLICY);
+  }
   return user;
 }
