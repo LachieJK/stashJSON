@@ -52,6 +52,19 @@ The design and its rejected alternatives are recorded in
 the swap seam: the Postgres statement and table live behind `consume()` and are
 the only storage-specific code, so a different backend is a one-file change.
 
+## Plans and quotas
+
+- **Quota** — a per-tier cap on how many of a countable resource an account may
+  hold: workspaces, documents, API keys. A quota is checked when a resource is
+  **created** and never when it is read or written: an account over its quota
+  (after a downgrade, say) keeps everything it has and is refused only new
+  creates until it upgrades or deletes. Quotas and the rate-limit policy are
+  the two enforced halves of a **plan**; both are defined once, next to the
+  tier, so `/pricing` advertises the number the code enforces.
+  _Avoid_: limit (ambiguous with rate limit), cap, allowance
+- Version-history retention ("7 days of history") is advertised per plan but is
+  **not** a quota — it is a time window, not a count — and is not yet enforced.
+
 ## Access log
 
 - **Access log** — the record of every request to a route StashJSON controls,
@@ -67,6 +80,13 @@ the only storage-specific code, so a different backend is a one-file change.
   fallback to the actor. On a request against one's own resources, actor and
   owner are the same user; on a public read or a refused read of someone else's
   document, they differ.
+- **Handle** — how an owner sees an actor who is not them: a short, stable
+  pseudonym (`acct-7f3a`) derived per owner, so the same actor has a different
+  handle on every owner's Usage page and two owners cannot link their views.
+  It is computed on display, never stored, and never resolves back to a user.
+  An owner's own requests are shown as **You** plus the API key's name;
+  requests with no actor are **Anonymous**.
+  _Avoid_: user id, email, actor name
 - **Credential** — how the actor was identified: an API key, a web session, or
   none. This, not any network detail, is the log's anonymous-versus-signed-in
   distinction.
@@ -74,6 +94,15 @@ the only storage-specific code, so a different backend is a one-file change.
   not by opting in: every `app/api/**/route.ts` except the limiter's two
   exemptions is wrapped, and `tests/unit/routeCoverage.test.ts` fails one that
   is not.
+
+- **Warning** — a signal the Usage page raises from the log, by a fixed rule
+  stated in the UI. There are two: a resource is **probed** when it has
+  received at least a threshold of refused requests (`401`/`403`/`404`) in the
+  trailing hour; an account is **throttled** when any of its `:api` requests
+  were refused with `429` in the trailing hour. Because a public read bills
+  the owner, a throttled warning can be caused by someone else's traffic. A
+  warning is computed, never stored, and never names an actor — see *Handle*.
+  _Avoid_: attack, alert, incident
 
 The log holds no personal data beyond user ids the system already stores — no
 IP addresses, no user agents, no bodies. That is a decision, not an omission;

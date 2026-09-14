@@ -34,6 +34,7 @@ const APP: NavLink[] = [
     // Workspace detail pages are part of the dashboard area.
     match: ["/dashboard", "/workspaces"],
   },
+  { href: "/usage", label: "Usage" },
   { href: "/account", label: "Account" },
 ];
 
