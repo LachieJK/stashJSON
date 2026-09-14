@@ -2,8 +2,10 @@
 
 **Status:** Accepted (2026-09-14)
 **Code:** the `AccessLog` model in `prisma/schema.prisma`; `lib/accessLog.ts`
-(the `recordAccess` stash and the `withAccessLog` wrapper), with facts recorded
-in `resolveRequestUser` (`lib/auth.ts`) and `assertCanRead` (`lib/documents.ts`).
+(the `recordAccess` stash, the `withAccessLog` wrapper, and the after-response
+`persistAccess` job that writes the entry and opportunistically runs the
+bounded `pruneAccessLog` past `RETENTION_DAYS`), with facts recorded in
+`resolveRequestUser` (`lib/auth.ts`) and `assertCanRead` (`lib/documents.ts`).
 Wired on `GET /api/documents/[id]` first; the fan-out to every route, and
 `tests/unit/routeCoverage.test.ts` extended to require the wrapper, follow.
 **Glossary:** *Access log*, *Actor*, *Owner*, *Credential* in [`CONTEXT.md`](../../CONTEXT.md)
