@@ -5,9 +5,10 @@
 (the `recordAccess` stash, the `withAccessLog` wrapper, and the after-response
 `persistAccess` job that writes the entry and opportunistically runs the
 bounded `pruneAccessLog` past `RETENTION_DAYS`), with facts recorded in
-`resolveRequestUser` (`lib/auth.ts`) and `assertCanRead` (`lib/documents.ts`).
-Wired on `GET /api/documents/[id]` first; the fan-out to every route, and
-`tests/unit/routeCoverage.test.ts` extended to require the wrapper, follow.
+`resolveRequestUser` and `requireSessionUser` (`lib/auth.ts`), `assertCanRead`
+and `loadOwnedDocument` (`lib/documents.ts`), `loadOwnedWorkspace`
+(`lib/workspaces.ts`) and the create/list handlers. Every non-exempt
+`app/api/**/route.ts` is wrapped, enforced by `tests/unit/routeCoverage.test.ts`.
 **Glossary:** *Access log*, *Actor*, *Owner*, *Credential* in [`CONTEXT.md`](../../CONTEXT.md)
 
 ## Context
