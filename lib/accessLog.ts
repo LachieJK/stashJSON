@@ -23,6 +23,25 @@ import { prisma } from "@/lib/db";
 export const MAX_PATH_LENGTH = 512;
 
 /**
+ * How long an entry lives. Flat for every plan — tiered retention is deferred
+ * (see `CONTEXT.md`), so this is a constant here and not a plan entitlement.
+ */
+export const RETENTION_DAYS = 30;
+
+/**
+ * Pruning is opportunistic: there is no scheduler (`pg_cron` is deferred until
+ * the Neon compute stops scaling to zero), so the after-response job that
+ * writes an entry also, on a 1-in-`PRUNE_ONE_IN` roll, deletes one bounded
+ * batch of expired entries. The steady state holds as long as one prune per
+ * `PRUNE_ONE_IN` requests removes at least `PRUNE_ONE_IN` rows — which a batch
+ * of `PRUNE_BATCH_SIZE` does with room to spare — and a backlog drains at
+ * `PRUNE_BATCH_SIZE / PRUNE_ONE_IN` rows per request without any single job
+ * holding a long-running `DELETE`.
+ */
+export const PRUNE_ONE_IN = 100;
+export const PRUNE_BATCH_SIZE = 1000;
+
+/**
  * What the request path learns about a request, each piece nullable because
  * it may never be learnt: a `404` finds no owner, an anonymous read finds no
  * actor. `credential` defaults to `none` when no resolver recorded one.
@@ -110,6 +129,59 @@ async function write(entry: AccessEntry): Promise<void> {
   }
 }
 
+/** The instant before which an entry is past the retention window, as of `now`. */
+export function retentionCutoff(now: Date = new Date()): Date {
+  return new Date(now.getTime() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Delete one batch of entries older than the retention window, oldest first,
+ * and return how many went. Bounded so no single call holds a long `DELETE`;
+ * a backlog is drained by repeated calls. The `at` index serves the subquery.
+ * Throws on failure — the after-response job decides what that means.
+ */
+export async function pruneAccessLog(
+  now: Date = new Date(),
+  batchSize: number = PRUNE_BATCH_SIZE,
+): Promise<number> {
+  const cutoff = retentionCutoff(now);
+  return prisma.$executeRaw`
+    DELETE FROM access_logs
+    WHERE id IN (
+      SELECT id FROM access_logs
+      WHERE at < ${cutoff}::timestamptz
+      ORDER BY at
+      LIMIT ${batchSize}::int
+    )`;
+}
+
+/** What the after-response job may have injected: a die and a clock. */
+export type PersistOptions = {
+  /** Returns a number in `[0, 1)`; the prune fires below `1 / PRUNE_ONE_IN`. */
+  roll?: () => number;
+  /** The prune's notion of the present. */
+  now?: () => Date;
+};
+
+/**
+ * The after-response job: write the entry, then on a 1-in-`PRUNE_ONE_IN` roll
+ * prune one batch of expired entries. The two are independent — a prune that
+ * throws is logged and swallowed exactly like the insert, and neither can
+ * reach the request, which has already been answered.
+ */
+export async function persistAccess(
+  entry: AccessEntry,
+  { roll = Math.random, now = () => new Date() }: PersistOptions = {},
+): Promise<void> {
+  await write(entry);
+  if (roll() >= 1 / PRUNE_ONE_IN) return;
+  try {
+    await pruneAccessLog(now());
+  } catch (err) {
+    console.error("Access log prune failed; will retry on a later request:", err);
+  }
+}
+
 /**
  * Compose outside `handle()` — and outside `withRateLimit`, so a rebuilt `429`
  * is logged with its final status — to leave one entry per request.
@@ -120,8 +192,9 @@ async function write(entry: AccessEntry): Promise<void> {
  * can be checked against the file's location by a coverage test.
  *
  * The clock starts before the handler and stops after it, so `durationMs` is
- * the handler's own time including `handle()`'s error mapping. The insert is
- * scheduled with `after()` and adds nothing to the caller's latency.
+ * the handler's own time including `handle()`'s error mapping. The insert —
+ * and the occasional prune — run in one job scheduled with `after()` and add
+ * nothing to the caller's latency.
  */
 export function withAccessLog<Args extends unknown[]>(
   route: string,
@@ -138,7 +211,7 @@ export function withAccessLog<Args extends unknown[]>(
       status: res.status,
       durationMs: Math.round(performance.now() - started),
     };
-    afterResponse(() => write(entry));
+    afterResponse(() => persistAccess(entry));
     return res;
   };
 }

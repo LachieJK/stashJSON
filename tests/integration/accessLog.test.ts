@@ -242,6 +242,93 @@ describe.skipIf(!enabled)("access log (DB-backed)", () => {
     expect(entry.path).toBe(`/api/documents/${doc.id}`);
   });
 
+  describe("pruning", () => {
+    /** Seed `count` entries for `ownerUserId`, each `at` the given instant. */
+    async function seed(ownerUserId: string, at: Date, count: number, tag: string) {
+      await prisma.accessLog.createMany({
+        data: Array.from({ length: count }, (_, i) => ({
+          at,
+          method: "GET",
+          route: "/api/documents/[id]",
+          path: `/api/documents/seed-${tag}-${i}`,
+          status: 200,
+          durationMs: 1,
+          credential: "none" as const,
+          ownerUserId,
+        })),
+      });
+    }
+
+    const remaining = (ownerUserId: string, tag: string) =>
+      prisma.accessLog.count({
+        where: { ownerUserId, path: { startsWith: `/api/documents/seed-${tag}-` } },
+      });
+
+    const daysAgo = (days: number, offsetMs = 0) =>
+      new Date(Date.now() - days * 24 * 60 * 60 * 1000 + offsetMs);
+
+    it("pruneAccessLog deletes past the window only, in bounded batches, oldest first", async () => {
+      const { pruneAccessLog, RETENTION_DAYS, retentionCutoff } = await import("@/lib/accessLog");
+      const owner = await newUser("prune-bound");
+      const now = new Date();
+      const cutoff = retentionCutoff(now);
+
+      // Either side of the boundary, one second apart, plus a deep backlog.
+      await seed(owner.user.id, new Date(cutoff.getTime() - 1000), 1, "expired-edge");
+      await seed(owner.user.id, new Date(cutoff.getTime() + 1000), 1, "kept-edge");
+      await seed(owner.user.id, daysAgo(RETENTION_DAYS + 5), 7, "backlog");
+      await seed(owner.user.id, daysAgo(1), 3, "recent");
+
+      // 8 expired rows, batches of 3: 3, 3, 2, then nothing left to do.
+      expect(await pruneAccessLog(now, 3)).toBe(3);
+      // Oldest first: the 5-days-past backlog goes before the edge case.
+      expect(await remaining(owner.user.id, "backlog")).toBe(4);
+      expect(await remaining(owner.user.id, "expired-edge")).toBe(1);
+      expect(await pruneAccessLog(now, 3)).toBe(3);
+      expect(await pruneAccessLog(now, 3)).toBe(2);
+      expect(await pruneAccessLog(now, 3)).toBe(0);
+
+      expect(await remaining(owner.user.id, "backlog")).toBe(0);
+      expect(await remaining(owner.user.id, "expired-edge")).toBe(0);
+      expect(await remaining(owner.user.id, "kept-edge")).toBe(1);
+      expect(await remaining(owner.user.id, "recent")).toBe(3);
+    });
+
+    it("driving requests drains a seeded backlog in PRUNE_BATCH_SIZE steps", async () => {
+      const { PRUNE_BATCH_SIZE, RETENTION_DAYS } = await import("@/lib/accessLog");
+      const owner = await newUser("prune-drive");
+      const doc = await newDocument(owner.user.id, true);
+      const backlog = PRUNE_BATCH_SIZE + 50;
+      await seed(owner.user.id, daysAgo(RETENTION_DAYS + 1), backlog, "drive");
+      await seed(owner.user.id, daysAgo(RETENTION_DAYS - 1), 5, "keep");
+
+      // Force the 1-in-N roll to hit on every request.
+      const random = vi.spyOn(Math, "random").mockReturnValue(0);
+      try {
+        expect((await read(doc.id)).status).toBe(200);
+        await vi.waitFor(
+          async () => expect(await remaining(owner.user.id, "drive")).toBe(50),
+          { timeout: 5000, interval: 50 },
+        );
+        expect((await read(doc.id)).status).toBe(200);
+        await vi.waitFor(
+          async () => expect(await remaining(owner.user.id, "drive")).toBe(0),
+          { timeout: 5000, interval: 50 },
+        );
+      } finally {
+        random.mockRestore();
+      }
+
+      expect(await remaining(owner.user.id, "keep")).toBe(5);
+      // The requests' own entries were written and are inside the window.
+      await vi.waitFor(async () =>
+        expect(
+          await prisma.accessLog.count({ where: { path: `/api/documents/${doc.id}` } }),
+        ).toBe(2),
+      );
+    }, 15_000);
+  });
+
   it("deleting the actor nulls their entries; deleting the owner removes theirs", async () => {
     const owner = await newUser("cascade-owner");
     const stranger = await newUser("cascade-stranger");

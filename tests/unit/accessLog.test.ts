@@ -14,18 +14,24 @@ process.env.DATABASE_URL ??= "postgresql://u:p@localhost:5432/db";
 
 // Hoisted with the mocks: `next/server` is imported statically above, so its
 // factory runs before ordinary top-level `const`s would be initialised.
-const { create, deferred, after } = vi.hoisted(() => {
+const { create, executeRaw, deferred, after } = vi.hoisted(() => {
   const create = vi.fn<(args: { data: AccessEntry }) => Promise<unknown>>();
+  // The prune is one raw `DELETE`; the mock receives the tagged template's
+  // strings and its interpolated values (cutoff, batch size).
+  const executeRaw =
+    vi.fn<(strings: TemplateStringsArray, ...values: unknown[]) => Promise<number>>();
   // `after()` queues the task instead of running it, so a test can observe
   // the gap between the response returning and the row being written.
   const deferred: Array<() => Promise<void>> = [];
   const after = vi.fn((task: () => Promise<void>) => {
     deferred.push(task);
   });
-  return { create, deferred, after };
+  return { create, executeRaw, deferred, after };
 });
 
-vi.mock("@/lib/db", () => ({ prisma: { accessLog: { create } } }));
+vi.mock("@/lib/db", () => ({
+  prisma: { accessLog: { create }, $executeRaw: executeRaw },
+}));
 vi.mock("next/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next/server")>();
   return { ...actual, after };
@@ -44,7 +50,28 @@ beforeEach(() => {
   vi.clearAllMocks();
   deferred.length = 0;
   create.mockResolvedValue({});
+  executeRaw.mockResolvedValue(0);
 });
+
+const entry: AccessEntry = {
+  credential: "none",
+  actorUserId: null,
+  ownerUserId: null,
+  apiKeyId: null,
+  documentId: null,
+  workspaceId: null,
+  method: "GET",
+  route: "/api/documents/[id]",
+  path: "/api/documents/d1",
+  status: 200,
+  durationMs: 1,
+};
+
+/** The interpolated values of the one raw `DELETE` the prune issued. */
+const pruneArgs = (): unknown[] => {
+  expect(executeRaw).toHaveBeenCalledTimes(1);
+  return executeRaw.mock.calls[0].slice(1);
+};
 
 describe("withAccessLog", () => {
   it("writes method, route literal, path, status and duration after the response", async () => {
@@ -208,5 +235,120 @@ describe("recordAccess", () => {
     const b = new Request("http://test/api/documents/b");
     recordAccess(a, { ownerUserId: "owner-a" });
     expect(recordedAccess(b).ownerUserId).toBeNull();
+  });
+});
+
+describe("pruning (retention window)", () => {
+  const now = new Date("2026-09-14T12:00:00.000Z");
+  const cutoff = new Date("2026-08-15T12:00:00.000Z");
+
+  it("retentionCutoff is exactly RETENTION_DAYS before the given clock", async () => {
+    const { retentionCutoff, RETENTION_DAYS } = await import("@/lib/accessLog");
+    expect(RETENTION_DAYS).toBe(30);
+    expect(retentionCutoff(now)).toEqual(cutoff);
+  });
+
+  it("pruneAccessLog issues one bounded DELETE at the cutoff and returns the count", async () => {
+    const { pruneAccessLog, PRUNE_BATCH_SIZE } = await import("@/lib/accessLog");
+    executeRaw.mockResolvedValue(7);
+
+    expect(await pruneAccessLog(now)).toBe(7);
+    const [at, limit] = pruneArgs();
+    expect(at).toEqual(cutoff);
+    expect(limit).toBe(PRUNE_BATCH_SIZE);
+    expect(PRUNE_BATCH_SIZE).toBe(1000);
+
+    const sql = executeRaw.mock.calls[0][0].join("?");
+    expect(sql).toMatch(/DELETE FROM access_logs/);
+    expect(sql).toMatch(/LIMIT/);
+  });
+
+  it("pruneAccessLog accepts a smaller batch bound", async () => {
+    const { pruneAccessLog } = await import("@/lib/accessLog");
+    await pruneAccessLog(now, 5);
+    expect(pruneArgs()[1]).toBe(5);
+  });
+
+  it("persistAccess writes the entry and skips the prune when the roll misses", async () => {
+    const { persistAccess, PRUNE_ONE_IN } = await import("@/lib/accessLog");
+    await persistAccess(entry, { roll: () => 1 / PRUNE_ONE_IN, now: () => now });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(executeRaw).not.toHaveBeenCalled();
+  });
+
+  it("persistAccess prunes with the injected clock when the roll hits", async () => {
+    const { persistAccess, PRUNE_ONE_IN } = await import("@/lib/accessLog");
+    expect(PRUNE_ONE_IN).toBe(100);
+    await persistAccess(entry, { roll: () => 1 / PRUNE_ONE_IN - 1e-9, now: () => now });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(pruneArgs()[0]).toEqual(cutoff);
+    // The insert lands before the prune is considered.
+    expect(create.mock.invocationCallOrder[0]).toBeLessThan(
+      executeRaw.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("fires on exactly the 1-in-PRUNE_ONE_IN rolls of a sweep over [0, 1)", async () => {
+    const { persistAccess, PRUNE_ONE_IN } = await import("@/lib/accessLog");
+    const N = PRUNE_ONE_IN * 10;
+    for (let i = 0; i < N; i++) {
+      await persistAccess(entry, { roll: () => i / N, now: () => now });
+    }
+    expect(executeRaw).toHaveBeenCalledTimes(N / PRUNE_ONE_IN);
+  });
+
+  it("logs and swallows a failed prune; the entry insert is unaffected", async () => {
+    const { persistAccess } = await import("@/lib/accessLog");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    executeRaw.mockRejectedValue(new Error("lock timeout"));
+
+    await expect(
+      persistAccess(entry, { roll: () => 0, now: () => now }),
+    ).resolves.toBeUndefined();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("Access log prune failed"),
+      expect.any(Error),
+    );
+    error.mockRestore();
+  });
+
+  it("a failed insert does not stop the prune", async () => {
+    const { persistAccess } = await import("@/lib/accessLog");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    create.mockRejectedValue(new Error("db down"));
+
+    await persistAccess(entry, { roll: () => 0, now: () => now });
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    error.mockRestore();
+  });
+
+  it("runs only inside the after-response job: the response never waits on it", async () => {
+    const { withAccessLog } = await import("@/lib/accessLog");
+    const random = vi.spyOn(Math, "random").mockReturnValue(0); // always fires
+    let finishPrune!: () => void;
+    executeRaw.mockImplementation(
+      () =>
+        new Promise<number>((resolve) => {
+          finishPrune = () => resolve(3);
+        }),
+    );
+
+    const handler = withAccessLog("/api/documents/[id]", async () =>
+      NextResponse.json({ ok: true }),
+    );
+    const res = await handler(new Request("http://test/api/documents/d1"));
+    expect(res.status).toBe(200);
+    // Nothing has touched the database yet — not the insert, not the prune.
+    expect(create).not.toHaveBeenCalled();
+    expect(executeRaw).not.toHaveBeenCalled();
+    expect(after).toHaveBeenCalledTimes(1);
+
+    const job = flush();
+    await vi.waitFor(() => expect(executeRaw).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledTimes(1);
+    finishPrune();
+    await job;
+    random.mockRestore();
   });
 });
