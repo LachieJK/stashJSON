@@ -54,13 +54,16 @@ describe.skipIf(!enabled)("API edge cases (DB-backed)", () => {
   let prisma: import("@/prisma/generated/client").PrismaClient;
   const createdUserIds: string[] = [];
 
-  async function newUserKey(): Promise<string> {
+  // Defaults to FREE, whose quotas allow one workspace; a test that needs
+  // more than the cap of a countable resource asks for a bigger tier.
+  async function newUserKey(tier: "FREE" | "PRO" = "FREE"): Promise<string> {
     const { randomUUID } = await import("node:crypto");
     const { issueApiKey } = await import("@/lib/apiKeys");
     const user = await prisma.user.create({
       data: {
         name: "API key user",
         email: `apikey_${randomUUID()}@stashjson.local`,
+        tier,
       },
     });
     createdUserIds.push(user.id);
@@ -864,7 +867,8 @@ describe.skipIf(!enabled)("API edge cases (DB-backed)", () => {
 
   describe("workspace document listing & pagination", () => {
     it("lists newest-first, scoped to the workspace, with a working `after` cursor", async () => {
-      const key = await newUserKey();
+      // Two workspaces for one user: past FREE's quota of one.
+      const key = await newUserKey("PRO");
       const wsId = await createWorkspace(key, "Paged");
       const otherWs = await createWorkspace(key, "Other");
 

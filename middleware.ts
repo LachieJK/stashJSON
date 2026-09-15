@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 // Dashboard routes that require a logged-in session.
-const PROTECTED_PREFIXES = ["/dashboard", "/workspaces", "/account"];
+const PROTECTED_PREFIXES = ["/dashboard", "/workspaces", "/usage", "/account"];
 
 // Response headers a cross-origin browser client is allowed to read. CORS
 // exposes only the safelisted few by default, which excludes all of these.
@@ -60,6 +60,7 @@ export const config = {
     "/api/:path*",
     "/dashboard/:path*",
     "/workspaces/:path*",
+    "/usage/:path*",
     "/account/:path*",
   ],
 };

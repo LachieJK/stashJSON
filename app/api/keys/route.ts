@@ -7,6 +7,7 @@ import { recordOwnAccount, withAccessLog } from "@/lib/accessLog";
 import { apiKeyNameSchema } from "@/lib/schemas";
 import { apiKeyResponse } from "@/lib/serializers";
 import { issueApiKey, KEY_REVEAL_MESSAGE } from "@/lib/apiKeys";
+import { assertWithinQuota } from "@/lib/quotas";
 
 // GET /api/keys — list the logged-in user's API keys (metadata only).
 export const GET = withAccessLog(
@@ -32,6 +33,7 @@ export const POST = withAccessLog(
       const user = await requireSessionUser(req);
       recordOwnAccount(req, user.id);
       const { name } = await parseBody(req, apiKeyNameSchema);
+      await assertWithinQuota(user, "apiKeys");
       const { raw, record } = await issueApiKey(user.id, name);
       return NextResponse.json(
         { api_key: raw, message: KEY_REVEAL_MESSAGE, key: apiKeyResponse(record) },

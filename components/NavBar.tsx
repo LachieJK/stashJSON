@@ -8,8 +8,8 @@ import { LogoutButton } from "./LogoutButton";
 
 // The one navbar, rendered on every route group by <SiteNav> (which reads the
 // session server-side and passes auth state down). Every area of the product
-// stays reachable from everywhere: Docs/Pricing always, Dashboard/Account when
-// logged in, Log in/Sign up when logged out. Below `md` the links collapse
+// stays reachable from everywhere: Docs/Pricing always, Dashboard/Usage/Account
+// when logged in, Log in/Sign up when logged out. Below `md` the links collapse
 // into a disclosure menu hanging off the bar.
 //
 // Client component only for the interactive bits: the active-route marker
@@ -34,6 +34,7 @@ const APP: NavLink[] = [
     // Workspace detail pages are part of the dashboard area.
     match: ["/dashboard", "/workspaces"],
   },
+  { href: "/usage", label: "Usage" },
   { href: "/account", label: "Account" },
 ];
 

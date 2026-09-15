@@ -17,6 +17,14 @@ describe("ApiError", () => {
     expect(err.message).toBe("Access denied");
     expect(err).toBeInstanceOf(Error);
     expect(err.name).toBe("ApiError");
+    expect(err.type).toBeUndefined();
+  });
+
+  it("optionally carries a problem-type URI", () => {
+    const err = new ApiError(403, "Plan quota exceeded", {
+      type: "https://stashjson.com/docs/errors/quota-exceeded",
+    });
+    expect(err.type).toBe("https://stashjson.com/docs/errors/quota-exceeded");
   });
 });
 
@@ -45,6 +53,19 @@ describe("handle", () => {
     });
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ detail: "API key is required" });
+  });
+
+  it("adds `type` to the body only when the ApiError carries one", async () => {
+    const res = await handle(async () => {
+      throw new ApiError(403, "Plan quota exceeded", {
+        type: "https://stashjson.com/docs/errors/quota-exceeded",
+      });
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      detail: "Plan quota exceeded",
+      type: "https://stashjson.com/docs/errors/quota-exceeded",
+    });
   });
 
   it("turns a thrown ZodError into a 400 naming the failing path", async () => {

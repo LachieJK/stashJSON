@@ -61,7 +61,7 @@ const API_ERRORS: ApiErrorDoc[] = [
     status: 403,
     title: "Access denied",
     explanation:
-      "Your credentials are valid, but the document belongs to someone else. Workspaces answer 404 in the same situation — a workspace you don't own is indistinguishable from one that doesn't exist.",
+      "Your credentials are valid, but the document belongs to someone else. Workspaces answer 404 in the same situation — a workspace you don't own is indistinguishable from one that doesn't exist. A create that would exceed your plan's quota is also a 403, distinguished by a `type` of https://stashjson.com/docs/errors/quota-exceeded in the body.",
     body: `{
   "detail": "Access denied"
 }`,
