@@ -2,6 +2,7 @@ import { Prisma, type User } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
 import { PLANS, QUOTA_RESOURCES, type QuotaResource } from "@/lib/plans";
 import { countOwned } from "@/lib/quotas";
+import type { StatusClass } from "@/lib/statusClass";
 import type { CredFilter, Range } from "@/lib/usageFilters";
 
 /**
@@ -75,21 +76,7 @@ export async function loadPlanUsage(
 }
 
 // ---------------------------------------------------------------------------
-// Traffic: status classes and the bucket grid.
-
-/**
- * The four classes the Traffic chart stacks. `429` is its own class — the
- * throttled count is a headline figure, so it is never folded into `4xx`.
- */
-export const STATUS_CLASSES = ["2xx", "4xx", "429", "5xx"] as const;
-export type StatusClass = (typeof STATUS_CLASSES)[number];
-
-export function statusClass(status: number): StatusClass {
-  if (status === 429) return "429";
-  if (status >= 500) return "5xx";
-  if (status >= 400) return "4xx";
-  return "2xx";
-}
+// Traffic: the bucket grid.
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;

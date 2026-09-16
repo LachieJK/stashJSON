@@ -10,7 +10,7 @@ process.env.DATABASE_URL ??= "postgresql://u:p@localhost:5432/db";
 
 describe("statusClass", () => {
   it("puts 429 in its own class, never in 4xx", async () => {
-    const { statusClass } = await import("@/lib/usage");
+    const { statusClass } = await import("@/lib/statusClass");
     expect(statusClass(429)).toBe("429");
     expect(statusClass(404)).toBe("4xx");
     expect(statusClass(401)).toBe("4xx");
@@ -18,7 +18,7 @@ describe("statusClass", () => {
   });
 
   it("classes 2xx/3xx as ok and 5xx as server error", async () => {
-    const { statusClass } = await import("@/lib/usage");
+    const { statusClass } = await import("@/lib/statusClass");
     expect(statusClass(200)).toBe("2xx");
     expect(statusClass(304)).toBe("2xx");
     expect(statusClass(500)).toBe("5xx");
