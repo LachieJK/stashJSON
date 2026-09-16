@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
- * The Usage page's access-log aggregates (#62) against a real Postgres:
- * traffic buckets, the hero summary, and the two warnings. Rows are inserted
+ * The Usage page's access-log aggregates against a real Postgres: traffic
+ * buckets, the hero summary and the two warnings (#62), then the hourly
+ * counts behind the heatmap and the per-resource rows (#63). Rows are inserted
  * straight into `access_logs` with chosen timestamps, since the rules under
  * test are about *when* and *what* was logged, not how it got there.
  *
@@ -267,6 +268,172 @@ describe.skipIf(!enabled)("usage aggregates (DB-backed)", () => {
         probed: [{ resourceId: "d1", refused: 20, distinctActors: 1 }],
         throttled: 1,
       });
+    });
+  });
+  describe("hourlyCounts", () => {
+    it("returns only the non-empty UTC hours, in order, within the range", async () => {
+      const owner = await newUser("hourly");
+      await log(owner.id, [
+        { at: new Date("2026-09-16T09:10:00Z"), status: 200 },
+        { at: new Date("2026-09-16T09:50:00Z"), status: 404 },
+        { at: new Date("2026-09-16T11:59:00Z"), status: 200 },
+        { at: new Date("2026-09-15T11:30:00Z"), status: 200 }, // before the 24h range
+      ]);
+      const rows = await usage.hourlyCounts(
+        { userId: owner.id, range: "24h", cred: "all", resource: null },
+        NOW,
+      );
+      expect(rows).toEqual([
+        { hourUtc: new Date("2026-09-16T09:00:00Z"), count: 2 },
+        { hourUtc: new Date("2026-09-16T11:00:00Z"), count: 1 },
+      ]);
+    });
+
+    it("includes workspace-level entries (no document) under a workspace-id resource filter", async () => {
+      const owner = await newUser("hourly-ws");
+      await log(owner.id, [
+        { at: minutesAgo(5), status: 200, documentId: "d1", workspaceId: "w1" },
+        { at: minutesAgo(5), status: 201, documentId: null, workspaceId: "w1" }, // POST /workspaces/w1/documents
+        { at: minutesAgo(5), status: 200, documentId: "d2", workspaceId: "w2" },
+      ]);
+      const rows = await usage.hourlyCounts(
+        { userId: owner.id, range: "1h", cred: "all", resource: "w1" },
+        NOW,
+      );
+      expect(rows.reduce((n, r) => n + r.count, 0)).toBe(2);
+    });
+  });
+
+  describe("resourceRows", () => {
+    async function ownedWorkspace(userId: string, name: string) {
+      return prisma.workspace.create({ data: { userId, name } });
+    }
+    async function ownedDocument(userId: string, workspaceId: string | null, isPublic = false) {
+      const { generateDocumentId } = await import("@/lib/utils");
+      return prisma.document.create({
+        data: { id: generateDocumentId(), userId, workspaceId, isPublic, jsonData: {} },
+      });
+    }
+    const noProbes = { probed: [], throttled: 0 };
+
+    it("groups documents under their workspace with totals, refused counts, a series and flags", async () => {
+      const owner = await newUser("rows");
+      const ws = await ownedWorkspace(owner.id, "Blog");
+      const pub = await ownedDocument(owner.id, ws.id, true);
+      const priv = await ownedDocument(owner.id, ws.id);
+      await log(owner.id, [
+        { at: minutesAgo(50), status: 200, documentId: pub.id, workspaceId: ws.id },
+        { at: minutesAgo(2), status: 200, documentId: pub.id, workspaceId: ws.id },
+        { at: minutesAgo(2), status: 403, documentId: priv.id, workspaceId: ws.id },
+        { at: minutesAgo(2), status: 401, documentId: priv.id, workspaceId: ws.id },
+        { at: minutesAgo(2), status: 500, documentId: priv.id, workspaceId: ws.id },
+        // Workspace-level: counts for the workspace, not for any document.
+        { at: minutesAgo(2), status: 201, documentId: null, workspaceId: ws.id },
+      ]);
+      const rows = await usage.resourceRows(
+        { userId: owner.id, range: "1h", cred: "all", resource: null },
+        { probed: [{ resourceId: priv.id, refused: 20, distinctActors: 1 }], throttled: 0 },
+        NOW,
+      );
+      expect(rows).toEqual([
+        {
+          id: ws.id,
+          name: "Blog",
+          exists: true,
+          total: 6,
+          refused: 2,
+          probed: false,
+          documents: [
+            {
+              id: priv.id,
+              exists: true,
+              isPublic: false,
+              probed: true,
+              total: 3,
+              refused: 2,
+              series: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+            },
+            {
+              id: pub.id,
+              exists: true,
+              isPublic: true,
+              probed: false,
+              total: 2,
+              refused: 0,
+              series: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            },
+          ],
+        },
+      ]);
+    });
+
+    it("keeps a deleted document (and a deleted workspace) that still has rows in range", async () => {
+      const owner = await newUser("rows-deleted");
+      const ws = await ownedWorkspace(owner.id, "Gone");
+      const doc = await ownedDocument(owner.id, ws.id);
+      await log(owner.id, [
+        { at: minutesAgo(3), status: 200, documentId: doc.id, workspaceId: ws.id },
+      ]);
+      await prisma.document.delete({ where: { id: doc.id } });
+      const [row] = await usage.resourceRows(
+        { userId: owner.id, range: "1h", cred: "all", resource: null },
+        noProbes,
+        NOW,
+      );
+      expect(row).toMatchObject({ id: ws.id, name: "Gone", exists: true, total: 1 });
+      expect(row.documents).toEqual([
+        { id: doc.id, exists: false, isPublic: null, probed: false, total: 1, refused: 0, series: expect.any(Array) },
+      ]);
+
+      await prisma.workspace.delete({ where: { id: ws.id } });
+      const [gone] = await usage.resourceRows(
+        { userId: owner.id, range: "1h", cred: "all", resource: null },
+        noProbes,
+        NOW,
+      );
+      expect(gone).toMatchObject({ id: ws.id, name: null, exists: false, total: 1 });
+    });
+
+    it("lists documents outside any workspace in a final group with a null id", async () => {
+      const owner = await newUser("rows-detached");
+      const ws = await ownedWorkspace(owner.id, "Has one");
+      const inWs = await ownedDocument(owner.id, ws.id);
+      const loose = await ownedDocument(owner.id, null);
+      await log(owner.id, [
+        { at: minutesAgo(3), status: 200, documentId: inWs.id, workspaceId: ws.id },
+        { at: minutesAgo(3), status: 200, documentId: loose.id, workspaceId: null },
+        { at: minutesAgo(3), status: 200, documentId: loose.id, workspaceId: null },
+      ]);
+      const rows = await usage.resourceRows(
+        { userId: owner.id, range: "1h", cred: "all", resource: null },
+        noProbes,
+        NOW,
+      );
+      // Ordered by total, except the detached group is always last.
+      expect(rows.map((r) => [r.id, r.total])).toEqual([
+        [ws.id, 1],
+        [null, 2],
+      ]);
+      expect(rows[1].documents[0]).toMatchObject({ id: loose.id, total: 2 });
+    });
+
+    it("applies the page filters", async () => {
+      const owner = await newUser("rows-filtered");
+      const ws = await ownedWorkspace(owner.id, "Filtered");
+      const a = await ownedDocument(owner.id, ws.id);
+      const b = await ownedDocument(owner.id, ws.id);
+      await log(owner.id, [
+        { at: minutesAgo(3), status: 200, documentId: a.id, workspaceId: ws.id, credential: "api_key" },
+        { at: minutesAgo(3), status: 200, documentId: b.id, workspaceId: ws.id, credential: "none" },
+      ]);
+      const rows = await usage.resourceRows(
+        { userId: owner.id, range: "1h", cred: "none", resource: b.id },
+        noProbes,
+        NOW,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].total).toBe(1);
+      expect(rows[0].documents.map((d) => d.id)).toEqual([b.id]);
     });
   });
 });

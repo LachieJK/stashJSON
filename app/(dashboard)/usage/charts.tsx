@@ -3,7 +3,8 @@
 /*
  * The Usage page's charts: hand-rolled inline SVG, token colours only
  * (decision in #60 — no chart dependency). Marks are thin, stacked segments
- * keep a 2px surface gap, every mark has a hover tooltip, and text never
+ * and heatmap cells keep a 2px surface gap, every mark has a hover tooltip
+ * (the sparkline excepted — its row states the figures), and text never
  * wears a series colour. Lifted from `charts.tsx` on `prototype/usage-page`.
  *
  * Buckets arrive from the server with epoch-ms starts; labels are formatted
@@ -14,6 +15,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { STATUS_CLASSES, type StatusClass } from "@/lib/statusClass";
 import type { Range } from "@/lib/usageFilters";
+import { browserLocal, fixedOffset, foldHeatmap, type HourCount } from "@/lib/usageHeatmap";
 
 /** A `TrafficBucket` as the page hands it to a client component. */
 export type ChartBucket = {
@@ -328,4 +330,122 @@ function niceMax(v: number): number {
   const p = Math.pow(10, Math.floor(Math.log10(v)));
   const m = v / p;
   return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+}
+
+// ---------------------------------------------------------------------------
+// When: the weekday × hour heatmap.
+
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const HOUR_LABELS = [0, 6, 12, 18, 23];
+
+/**
+ * Requests by hour of day × weekday, folded here from the server's UTC hours
+ * so the cells are the viewer's local hours. Sequential encoding: one hue
+ * (ink), more is darker via opacity, with an empty cell drawn faintly so the
+ * grid's shape is always visible. The server pass folds in UTC and the
+ * browser re-folds in its own zone once mounted, the same way the axis labels
+ * of the other charts localise.
+ */
+export function Heatmap({ rows, range }: { rows: HourCount[]; range: Range }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const [hover, setHover] = useState<[number, number] | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const W = useWidth(ref);
+
+  const grid = foldHeatmap(rows, mounted ? browserLocal : fixedOffset(0));
+  const max = Math.max(1, ...grid.flat());
+  const gap = 2;
+  const padL = 30;
+  const padT = 14;
+  const cell = Math.min(22, Math.max(8, (W - padL) / 24 - gap));
+  const H = padT + 7 * (cell + gap);
+  const cx = (h: number) => padL + h * (cell + gap);
+  const cy = (d: number) => padT + d * (cell + gap);
+
+  return (
+    <div>
+      <div className="relative" ref={ref}>
+        <svg
+          width={W}
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          className="block"
+          role="img"
+          aria-label="Requests by hour of day and weekday"
+        >
+          {HOUR_LABELS.map((h) => (
+            <text key={h} x={cx(h) + cell / 2} y={9} textAnchor="middle" {...AXIS}>
+              {String(h).padStart(2, "0")}
+            </text>
+          ))}
+          {grid.map((row, d) => (
+            <g key={d}>
+              <text x={padL - 6} y={cy(d) + cell / 2 + 3} textAnchor="end" {...AXIS}>
+                {DAYS[d]}
+              </text>
+              {row.map((v, h) => (
+                <rect
+                  key={h}
+                  x={cx(h)}
+                  y={cy(d)}
+                  width={cell}
+                  height={cell}
+                  rx={2}
+                  fill="var(--color-text)"
+                  opacity={v === 0 ? 0.06 : 0.15 + 0.85 * (v / max)}
+                  onMouseEnter={() => setHover([d, h])}
+                  onMouseLeave={() => setHover(null)}
+                />
+              ))}
+            </g>
+          ))}
+        </svg>
+        {hover ? (
+          <Tip x={`${((cx(hover[1]) + cell / 2) / W) * 100}%`}>
+            <div className="text-muted">
+              {DAYS[hover[0]]} {String(hover[1]).padStart(2, "0")}:00
+            </div>
+            <div>{grid[hover[0]][hover[1]].toLocaleString("en-US")} requests</div>
+          </Tip>
+        ) : null}
+      </div>
+      {range === "1h" || range === "24h" ? (
+        <p className="mt-3 font-mono text-[11px] text-muted">
+          A {range} range fills only a sliver of the week — 7d and 30d fill the grid.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// What: the per-document sparkline.
+
+/** One thin muted line over the range's buckets; no axes, no hover — the row's figures carry the numbers. */
+export function Sparkline({
+  values,
+  width = 72,
+  height = 18,
+}: {
+  values: number[];
+  width?: number;
+  height?: number;
+}) {
+  const max = Math.max(1, ...values);
+  const x = (i: number) => (i / Math.max(1, values.length - 1)) * (width - 2) + 1;
+  const y = (v: number) => height - 2 - (v / max) * (height - 4);
+  const d = values.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
+  return (
+    <svg width={width} height={height} className="block shrink-0" aria-hidden>
+      <path
+        d={d}
+        fill="none"
+        stroke="var(--color-muted)"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
