@@ -3,8 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/betterAuth";
 import { prisma } from "@/lib/db";
-import { PLANS, QUOTA_LABELS } from "@/lib/plans";
+import { PLANS, QUOTA_LABELS, ratePerMinute } from "@/lib/plans";
 import {
+  BUCKET_LABEL,
   loadPlanUsage,
   loadResourceOptions,
   summary,
@@ -20,8 +21,6 @@ import { UsageSection } from "./UsageSection";
 import { Warnings } from "./Warnings";
 
 export const metadata: Metadata = { title: "Usage · StashJSON" };
-
-const BUCKET_LABEL = { "1h": "5 minutes", "24h": "hour", "7d": "6 hours", "30d": "day" } as const;
 
 /*
  * The Usage page — the "Ledger" layout from the prototype (#60): one framed
@@ -61,7 +60,7 @@ export default async function UsagePage({
   ]);
   const plan = PLANS[user.tier];
   const price = `$${plan.priceMonthly}/mo`;
-  const ceiling = plan.policy.refillPerSecond * 60;
+  const ceiling = ratePerMinute(plan.policy);
   const peak = Math.max(0, ...buckets.map((b) => b.peakRpm));
   // Client components take plain numbers, not Dates.
   const chartBuckets = buckets.map((b) => ({ ...b, start: b.start.getTime() }));

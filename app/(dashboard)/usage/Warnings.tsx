@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Plan } from "@/lib/plans";
+import { ratePerMinute, type Plan } from "@/lib/plans";
 import type { ResourceOptions, Warnings as WarningsData } from "@/lib/usage";
 import { usageQuery, type UsageFilters } from "@/lib/usageFilters";
 
@@ -22,7 +22,7 @@ export function Warnings({
   plan: Plan;
 }) {
   if (warnings.probed.length === 0 && warnings.throttled === 0) return null;
-  const perMinute = (plan.policy.refillPerSecond * 60).toLocaleString("en-US");
+  const perMinute = ratePerMinute(plan.policy).toLocaleString("en-US");
 
   return (
     <ul className="mt-6 flex flex-col gap-2 text-sm">

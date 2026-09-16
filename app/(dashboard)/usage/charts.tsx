@@ -25,14 +25,14 @@ export type ChartBucket = {
 
 // The four status tokens, per #60: 2xx = ink, 4xx = warn, 429 = info,
 // 5xx = danger. CVD separation was validated there; do not restyle here.
-export const CLASS_COLOR: Record<StatusClass, string> = {
+const CLASS_COLOR: Record<StatusClass, string> = {
   "2xx": "var(--color-text)",
   "4xx": "var(--color-warn)",
   "429": "var(--color-info)",
   "5xx": "var(--color-danger)",
 };
 
-export const CLASS_LABEL: Record<StatusClass, string> = {
+const CLASS_LABEL: Record<StatusClass, string> = {
   "2xx": "OK",
   "4xx": "Client error",
   "429": "Throttled",
@@ -71,7 +71,7 @@ function useWidth(ref: RefObject<HTMLDivElement | null>): number {
 }
 
 /** A bucket's axis label at the range's natural precision. */
-export function bucketLabel(startMs: number, range: Range, timeZone: string): string {
+function bucketLabel(startMs: number, range: Range, timeZone: string): string {
   const d = new Date(startMs);
   const time = d.toLocaleTimeString("en-GB", {
     timeZone,
@@ -324,7 +324,7 @@ export function RatePressure({
 }
 
 /** The next 1 / 2 / 5 × 10ⁿ at or above `v`, for a top gridline that reads cleanly. */
-export function niceMax(v: number): number {
+function niceMax(v: number): number {
   const p = Math.pow(10, Math.floor(Math.log10(v)));
   const m = v / p;
   return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;

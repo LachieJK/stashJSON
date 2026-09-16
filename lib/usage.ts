@@ -3,15 +3,17 @@ import { prisma } from "@/lib/db";
 import { PLANS, QUOTA_RESOURCES, type QuotaResource } from "@/lib/plans";
 import { countOwned } from "@/lib/quotas";
 import type { StatusClass } from "@/lib/statusClass";
-import type { CredFilter, Range } from "@/lib/usageFilters";
+import type { Range, UsageFilters } from "@/lib/usageFilters";
 
 /**
  * Everything the Usage page reads, server-side only (decision in #60: no
  * public usage API — the aggregates live here and are called from the page).
- * This slice ships the resource picker and the plan headroom; the access-log
- * aggregates (traffic, warnings, heatmap, actors) arrive in the next slices.
- * The URL filters are in `lib/usageFilters.ts`, kept free of `lib/db` so the
- * client-side controls can import them.
+ * The resource picker and plan headroom need no log; the traffic buckets,
+ * hero summary and warnings are the first access-log aggregates (#62), with
+ * the heatmap, per-resource rows and actors still to come. The URL filters
+ * (`lib/usageFilters.ts`) and the status-class vocabulary
+ * (`lib/statusClass.ts`) are kept free of `lib/db` so client components can
+ * import them.
  */
 
 // ---------------------------------------------------------------------------
@@ -98,6 +100,14 @@ const BUCKET_MS: Record<Range, number> = {
   "30d": DAY_MS,
 };
 
+/** The same widths as the page says them ("requests per 6 hours"). */
+export const BUCKET_LABEL: Record<Range, string> = {
+  "1h": "5 minutes",
+  "24h": "hour",
+  "7d": "6 hours",
+  "30d": "day",
+};
+
 export type BucketGrid = {
   /** Inclusive start of bucket 0: exactly one range before `now`. */
   start: Date;
@@ -123,14 +133,8 @@ export function bucketGrid(range: Range, now: Date = new Date()): BucketGrid {
 // ---------------------------------------------------------------------------
 // Traffic buckets.
 
-/** The page's filters as the aggregates take them: the owner plus the three URL controls. */
-export type TrafficQuery = {
-  userId: string;
-  range: Range;
-  cred: CredFilter;
-  /** A workspace or document id, or null for everything the owner has. */
-  resource: string | null;
-};
+/** The page's three URL controls plus the owner whose view this is. */
+export type TrafficQuery = UsageFilters & { userId: string };
 
 export type TrafficBucket = {
   start: Date;
@@ -287,9 +291,14 @@ export type Warnings = {
  * a warning cannot be filtered out of sight. Never stored, never names an
  * actor (the count of sources is as far as it goes).
  *
- * Throttled counts every 429 the log attributes to the owner. A public read
- * by a stranger bills the owner's `:api` bucket and is logged with the owner,
- * so their traffic throttling this account is exactly what the rule is for.
+ * Throttled is "any 429 on the account's `:api` bucket", and every 429 the
+ * log attributes to the owner is one: resource routes meter `:api` whatever
+ * the credential (a dashboard cookie included), a public read by a stranger
+ * bills the owner's bucket and is logged with the owner — exactly the case
+ * the rule is for — and the `:dashboard` bucket's 429s (key/account routes)
+ * are thrown before an owner is recorded, so they never appear here. No
+ * credential predicate, then; filtering out `session` would drop real `:api`
+ * throttling.
  */
 export async function warnings(userId: string, now: Date = new Date()): Promise<Warnings> {
   const since = new Date(now.getTime() - WARNING_WINDOW_MS);

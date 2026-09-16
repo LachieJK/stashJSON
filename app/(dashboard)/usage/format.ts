@@ -1,5 +1,7 @@
-// Number formatting for the Usage page's figures. Pure, shared by the server
-// hero and the client charts.
+/**
+ * Number formatting for the Usage page's figures. Pure, shared by the server
+ * hero and the client charts.
+ */
 
 /** `1,234` up to five digits, then `12.3K` — the hero should never wrap. */
 export function compact(n: number): string {
