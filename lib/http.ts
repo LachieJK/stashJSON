@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 
-/** An error carrying an HTTP status. */
+/**
+ * An error carrying an HTTP status. `type` is an optional RFC 9457 problem-type
+ * URI for a rejection that has a docs anchor (a quota refusal); most errors are
+ * plain `{ detail }` and leave it unset.
+ */
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  type?: string;
+  constructor(status: number, message: string, options?: { type?: string }) {
     super(message);
     this.status = status;
+    this.type = options?.type;
     this.name = "ApiError";
   }
 }
@@ -17,9 +23,9 @@ function formatZodError(err: ZodError): string {
   return `Validation error at ${path}: ${first?.message ?? "invalid input"}`;
 }
 
-/** Error responses use the `{ detail }` shape. */
-export function errorResponse(status: number, detail: string) {
-  return NextResponse.json({ detail }, { status });
+/** Error responses use the `{ detail }` shape, plus `type` when there is one. */
+export function errorResponse(status: number, detail: string, type?: string) {
+  return NextResponse.json(type ? { detail, type } : { detail }, { status });
 }
 
 /**
@@ -32,7 +38,9 @@ export async function handle(
   try {
     return await fn();
   } catch (err) {
-    if (err instanceof ApiError) return errorResponse(err.status, err.message);
+    if (err instanceof ApiError) {
+      return errorResponse(err.status, err.message, err.type);
+    }
     if (err instanceof ZodError) return errorResponse(400, formatZodError(err));
     console.error("Unexpected route error:", err);
     return errorResponse(500, "Internal server error");

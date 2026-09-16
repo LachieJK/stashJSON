@@ -7,7 +7,11 @@ import { SiteNav } from "@/components/SiteNav";
 // cookie-presence redirect; this is the real check (it can reach the database).
 // The navbar is mounted here (and in the marketing layout) rather than in the
 // root layout, so the full-viewport (auth) pages can render without it; it
-// shows the Dashboard/Account links and logout for signed-in users.
+// shows the Dashboard/Usage/Account links and logout for signed-in users.
+//
+// Width is left to the nested groups: `(narrow)` wraps the card pages in the
+// dashboard's `max-w-3xl` column, while `/usage` renders the landing page's
+// wider framed report column and sets its own.
 export default async function DashboardLayout({
   children,
 }: {
@@ -19,9 +23,7 @@ export default async function DashboardLayout({
   return (
     <>
       <SiteNav />
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-8">
-        {children}
-      </main>
+      {children}
     </>
   );
 }

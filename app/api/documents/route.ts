@@ -9,6 +9,7 @@ import { assertMatchesWorkspaceTemplate } from "@/lib/documents";
 import { documentResponse } from "@/lib/serializers";
 import { withRateLimit } from "@/lib/rateLimit";
 import { recordAccess, recordOwnAccount, withAccessLog } from "@/lib/accessLog";
+import { assertWithinQuota } from "@/lib/quotas";
 
 // POST /api/documents — create a document (optionally inside a workspace).
 export const POST = withAccessLog(
@@ -32,6 +33,9 @@ export const POST = withAccessLog(
       } else {
         recordOwnAccount(req, user.id);
       }
+
+      // The cap counts documents regardless of workspace.
+      await assertWithinQuota(user, "documents");
 
       // Generate a unique 16-char ID (collisions are astronomically unlikely).
       let id = generateDocumentId();

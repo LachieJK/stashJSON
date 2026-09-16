@@ -6,6 +6,7 @@ import { workspaceCreateSchema } from "@/lib/schemas";
 import { workspaceResponse } from "@/lib/serializers";
 import { withRateLimit } from "@/lib/rateLimit";
 import { recordAccess, recordOwnAccount, withAccessLog } from "@/lib/accessLog";
+import { assertWithinQuota } from "@/lib/quotas";
 
 // POST /api/workspaces — create a workspace.
 export const POST = withAccessLog(
@@ -15,6 +16,7 @@ export const POST = withAccessLog(
       const user = await requireUser(req);
       recordOwnAccount(req, user.id);
       const body = await parseBody(req, workspaceCreateSchema);
+      await assertWithinQuota(user, "workspaces");
 
       const workspace = await prisma.workspace.create({
         data: { name: body.name, userId: user.id },

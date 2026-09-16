@@ -1,8 +1,9 @@
 // Static, intentionally inert plan catalog for the pricing page — no Stripe,
-// env, or network. It is also the single source of each tier's rate-limit
-// policy: `/pricing` derives its rate bullet from the policy the limiter
-// enforces (see `rateLimitFeature`), so the two cannot advertise different
-// numbers.
+// env, or network. It is also the single source of each tier's two enforced
+// halves: the rate-limit policy and the quotas. `/pricing` derives its rate
+// bullet from the policy the limiter enforces (see `rateLimitFeature`) and its
+// three count bullets from the quotas `assertWithinQuota` enforces (see
+// `quotaFeature`), so the page cannot advertise a number the code does not.
 
 import type { PlanTier } from "@/prisma/generated/enums";
 import type { BucketPolicy } from "@/lib/rateLimit";
@@ -27,7 +28,56 @@ export type Plan = {
    * as a typed string.
    */
   policy: BucketPolicy;
+
+  /**
+   * The tier's caps on countable resources — checked at create time only, see
+   * `lib/quotas.ts`. `features` carries each as `quotaFeature(...)`, never as
+   * a typed string.
+   */
+  quotas: Quotas;
 };
+
+/** The resources a plan caps. Keys double as the `assertWithinQuota` argument. */
+export type QuotaResource = "workspaces" | "documents" | "apiKeys";
+
+/** A cap per resource; `null` means unlimited. */
+export type Quotas = Record<QuotaResource, number | null>;
+
+/** Every quota-bearing resource, in the order the meters and docs list them. */
+export const QUOTA_RESOURCES: readonly QuotaResource[] = [
+  "workspaces",
+  "documents",
+  "apiKeys",
+];
+
+/**
+ * A cap as text: "1,000", or `unlimited` (default "Unlimited") for `null`.
+ * The one place the null/number split is spelled out, so the pricing bullet,
+ * the 403 detail, the docs table and the Usage meters cannot disagree.
+ */
+export function formatCap(cap: number | null, unlimited = "Unlimited"): string {
+  return cap === null ? unlimited : cap.toLocaleString("en-US");
+}
+
+/** Singular / plural labels for the `/pricing` bullets and the Usage meters. */
+export const QUOTA_LABELS: Record<QuotaResource, { one: string; many: string }> =
+  {
+    workspaces: { one: "workspace", many: "workspaces" },
+    documents: { one: "document", many: "documents" },
+    apiKeys: { one: "API key", many: "API keys" },
+  };
+
+/**
+ * The `/pricing` bullet for one quota, computed from the cap rather than typed
+ * beside it: "1 workspace", "100,000 documents", "Unlimited API keys".
+ */
+export function quotaFeature(
+  resource: QuotaResource,
+  cap: number | null,
+): string {
+  const label = QUOTA_LABELS[resource];
+  return `${formatCap(cap)} ${cap === 1 ? label.one : label.many}`;
+}
 
 /**
  * Build a policy, rejecting `refillPerSecond <= 0` at the one site where a
@@ -67,6 +117,12 @@ const FREE_POLICY = makePolicy(60, 1);
 const PRO_POLICY = makePolicy(600, 10);
 const TEAM_POLICY = makePolicy(6000, 100);
 
+// Each tier's quotas, defined once so the feature list below derives from them
+// and `assertWithinQuota` enforces the same numbers.
+const FREE_QUOTAS: Quotas = { workspaces: 1, documents: 1_000, apiKeys: 1 };
+const PRO_QUOTAS: Quotas = { workspaces: 10, documents: 100_000, apiKeys: 10 };
+const TEAM_QUOTAS: Quotas = { workspaces: null, documents: null, apiKeys: null };
+
 // Keyed by the Prisma `PlanTier` enum so `PLANS[user.tier]` is a total lookup
 // with no `undefined` branch.
 export const PLANS: Record<PlanTier, Plan> = {
@@ -76,14 +132,15 @@ export const PLANS: Record<PlanTier, Plan> = {
     tagline: "Everything you need to start storing JSON.",
     ctaLabel: "Start for free",
     features: [
-      "1 workspace",
-      "1,000 documents",
+      quotaFeature("workspaces", FREE_QUOTAS.workspaces),
+      quotaFeature("documents", FREE_QUOTAS.documents),
       rateLimitFeature(FREE_POLICY),
       "7 days of version history",
-      "1 API key",
+      quotaFeature("apiKeys", FREE_QUOTAS.apiKeys),
       "Community support",
     ],
     policy: FREE_POLICY,
+    quotas: FREE_QUOTAS,
   },
   PRO: {
     name: "Pro",
@@ -92,14 +149,15 @@ export const PLANS: Record<PlanTier, Plan> = {
     featured: true,
     ctaLabel: "Upgrade to Pro",
     features: [
-      "10 workspaces",
-      "100,000 documents",
+      quotaFeature("workspaces", PRO_QUOTAS.workspaces),
+      quotaFeature("documents", PRO_QUOTAS.documents),
       rateLimitFeature(PRO_POLICY),
       "90 days of version history",
-      "10 API keys",
+      quotaFeature("apiKeys", PRO_QUOTAS.apiKeys),
       "Email support",
     ],
     policy: PRO_POLICY,
+    quotas: PRO_QUOTAS,
   },
   TEAM: {
     name: "Team",
@@ -107,14 +165,15 @@ export const PLANS: Record<PlanTier, Plan> = {
     tagline: "For teams that need scale and control.",
     ctaLabel: "Choose Team",
     features: [
-      "Unlimited workspaces",
-      "Unlimited documents",
+      quotaFeature("workspaces", TEAM_QUOTAS.workspaces),
+      quotaFeature("documents", TEAM_QUOTAS.documents),
       rateLimitFeature(TEAM_POLICY),
       "1 year of version history",
-      "Unlimited API keys",
+      quotaFeature("apiKeys", TEAM_QUOTAS.apiKeys),
       "Priority support & SLA",
     ],
     policy: TEAM_POLICY,
+    quotas: TEAM_QUOTAS,
   },
 };
 
