@@ -107,8 +107,13 @@ export function makePolicy(
  * add a burst bullet.
  */
 export function rateLimitFeature(policy: BucketPolicy): string {
-  const perMinute = (policy.refillPerSecond * 60).toLocaleString("en-US");
+  const perMinute = ratePerMinute(policy).toLocaleString("en-US");
   return `${perMinute} requests / minute, shared across your API keys`;
+}
+
+/** The advertised sustained rate as the customer reads it: requests per minute. */
+export function ratePerMinute(policy: BucketPolicy): number {
+  return policy.refillPerSecond * 60;
 }
 
 // Each tier's `:api` policy, defined once so the feature list below can derive

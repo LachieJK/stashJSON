@@ -3,12 +3,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/betterAuth";
 import { prisma } from "@/lib/db";
-import { PLANS, QUOTA_LABELS } from "@/lib/plans";
-import { loadPlanUsage, loadResourceOptions } from "@/lib/usage";
+import { PLANS, QUOTA_LABELS, ratePerMinute } from "@/lib/plans";
+import {
+  BUCKET_LABEL,
+  loadPlanUsage,
+  loadResourceOptions,
+  summary,
+  trafficBuckets,
+  warnings,
+} from "@/lib/usage";
 import { parseUsageFilters } from "@/lib/usageFilters";
+import { RatePressure, TrafficChart } from "./charts";
+import { Hero } from "./Hero";
 import { Meter } from "./Meter";
 import { UsageControls } from "./UsageControls";
 import { UsageSection } from "./UsageSection";
+import { Warnings } from "./Warnings";
 
 export const metadata: Metadata = { title: "Usage · StashJSON" };
 
@@ -17,9 +27,11 @@ export const metadata: Metadata = { title: "Usage · StashJSON" };
  * report column in the landing page's texture, read top to bottom. Server
  * component: the controls live in the URL and every number is loaded here.
  *
- * Slice 1 (#61) ships the shell — frame, controls, Plan section. The sections
- * that read the access log (Traffic + warnings, When, What, Who, Log) are the
- * next three slices and slot in as further <UsageSection>s.
+ * Slice 1 (#61) shipped the shell — frame, controls, Plan section. Slice 2
+ * (#62) adds the first log-backed pieces: the hero figure and warnings in
+ * the header, the Traffic section, and the rate-pressure line in Plan. When,
+ * What, Who and Log are the next two slices and slot in as further
+ * <UsageSection>s.
  */
 export default async function UsagePage({
   searchParams,
@@ -35,12 +47,23 @@ export default async function UsagePage({
   if (!user) redirect("/login");
 
   const filters = parseUsageFilters(await searchParams);
-  const [resources, usage] = await Promise.all([
+  // One clock for every aggregate, so the buckets, the hero and the warnings
+  // agree on where "now" is.
+  const now = new Date();
+  const query = { userId: user.id, ...filters };
+  const [resources, usage, buckets, figures, warn] = await Promise.all([
     loadResourceOptions(user.id),
     loadPlanUsage(user),
+    trafficBuckets(query, now),
+    summary(query, now),
+    warnings(user.id, now),
   ]);
   const plan = PLANS[user.tier];
   const price = `$${plan.priceMonthly}/mo`;
+  const ceiling = ratePerMinute(plan.policy);
+  const peak = Math.max(0, ...buckets.map((b) => b.peakRpm));
+  // Client components take plain numbers, not Dates.
+  const chartBuckets = buckets.map((b) => ({ ...b, start: b.start.getTime() }));
 
   return (
     <main className="frame-col my-8">
@@ -49,7 +72,16 @@ export default async function UsagePage({
           <h1 className="text-base font-semibold">Usage</h1>
           <UsageControls filters={filters} resources={resources} />
         </div>
+        <Hero summary={figures} range={filters.range} />
+        <Warnings warnings={warn} filters={filters} resources={resources} plan={plan} />
       </div>
+
+      <UsageSection
+        title="Traffic"
+        kicker={`requests per ${BUCKET_LABEL[filters.range]}, by status`}
+      >
+        <TrafficChart data={chartBuckets} range={filters.range} />
+      </UsageSection>
 
       <UsageSection title="Plan" kicker={`${plan.name} · ${price}`}>
         <div className="grid gap-5 sm:grid-cols-3">
@@ -69,6 +101,17 @@ export default async function UsagePage({
             Change plan →
           </Link>
         </p>
+        <div className="mt-6">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 font-mono text-[11px] text-muted">
+            <span>peak requests per minute, each {BUCKET_LABEL[filters.range]}</span>
+            <span>
+              peak this range{" "}
+              <span className="text-text tabular-nums">{peak.toLocaleString("en-US")}</span> of{" "}
+              {ceiling.toLocaleString("en-US")}/min, shared across your API keys
+            </span>
+          </div>
+          <RatePressure data={chartBuckets} range={filters.range} ceiling={ceiling} />
+        </div>
       </UsageSection>
 
       {/* Closing rule so the frame's rails end on ticks, not in mid-air. */}
