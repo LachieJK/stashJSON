@@ -54,16 +54,18 @@ export default async function UsagePage({
   // agree on where "now" is.
   const now = new Date();
   const query = { userId: user.id, ...filters };
-  const [resources, usage, buckets, figures, warn, hours] = await Promise.all([
+  // The rows carry the probed badge from the warnings, so they chain off
+  // that one promise rather than waiting for the whole batch.
+  const warn = warnings(user.id, now);
+  const [resources, usage, buckets, figures, warnData, hours, rows] = await Promise.all([
     loadResourceOptions(user.id),
     loadPlanUsage(user),
     trafficBuckets(query, now),
     summary(query, now),
-    warnings(user.id, now),
+    warn,
     hourlyCounts(query, now),
+    warn.then((w) => resourceRows(query, w, now)),
   ]);
-  // After the warnings: the rows carry the probed badge from them.
-  const rows = await resourceRows(query, warn, now);
   const plan = PLANS[user.tier];
   const price = `$${plan.priceMonthly}/mo`;
   const ceiling = ratePerMinute(plan.policy);
@@ -80,7 +82,7 @@ export default async function UsagePage({
           <UsageControls filters={filters} resources={resources} />
         </div>
         <Hero summary={figures} range={filters.range} />
-        <Warnings warnings={warn} filters={filters} resources={resources} plan={plan} />
+        <Warnings warnings={warnData} filters={filters} resources={resources} plan={plan} />
       </div>
 
       <UsageSection

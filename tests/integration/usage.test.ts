@@ -417,6 +417,25 @@ describe.skipIf(!enabled)("usage aggregates (DB-backed)", () => {
       expect(rows[1].documents[0]).toMatchObject({ id: loose.id, total: 2 });
     });
 
+    it("under a workspace-id filter, counts the workspace's document-less entries too", async () => {
+      const owner = await newUser("rows-ws-filter");
+      const ws = await ownedWorkspace(owner.id, "Mine");
+      const other = await ownedWorkspace(owner.id, "Other");
+      const doc = await ownedDocument(owner.id, ws.id);
+      await log(owner.id, [
+        { at: minutesAgo(3), status: 200, documentId: doc.id, workspaceId: ws.id },
+        { at: minutesAgo(3), status: 201, documentId: null, workspaceId: ws.id }, // POST /workspaces/[id]/documents
+        { at: minutesAgo(3), status: 200, documentId: null, workspaceId: other.id },
+      ]);
+      const rows = await usage.resourceRows(
+        { userId: owner.id, range: "1h", cred: "all", resource: ws.id },
+        noProbes,
+        NOW,
+      );
+      expect(rows.map((r) => [r.id, r.total])).toEqual([[ws.id, 2]]);
+      expect(rows[0].documents.map((d) => [d.id, d.total])).toEqual([[doc.id, 1]]);
+    });
+
     it("applies the page filters", async () => {
       const owner = await newUser("rows-filtered");
       const ws = await ownedWorkspace(owner.id, "Filtered");

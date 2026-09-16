@@ -10,6 +10,7 @@ import {
   type TemplateDto,
   type WorkspaceDto,
 } from "@/lib/apiClient";
+import { usageHref } from "@/lib/usageFilters";
 
 // A public document is the owner's quota behind an unauthenticated URL: every
 // anonymous read spends the owner's API rate limit. Said at the control, before
@@ -59,7 +60,7 @@ function WorkspaceHeader({ id }: { id: string }) {
         <p className="font-mono text-xs text-muted">{ws.id}</p>
       </div>
       {/* The per-workspace usage view is the Usage page filtered to this id (#60). */}
-      <Link href={`/usage?resource=${ws.id}`} className="link text-sm">
+      <Link href={usageHref(ws.id)} className="link text-sm">
         Usage →
       </Link>
     </div>
@@ -287,7 +288,7 @@ function DocumentRow({
           {doc.is_public && <span className="pill pill-public">public</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/usage?resource=${doc.id}`} className="btn btn-secondary btn-sm">
+          <Link href={usageHref(doc.id)} className="btn btn-secondary btn-sm">
             Usage
           </Link>
           <button

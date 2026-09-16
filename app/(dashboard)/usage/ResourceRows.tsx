@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { WorkspaceRow } from "@/lib/usage";
+import { RESOURCE_ROW_LIMIT, type WorkspaceUsage } from "@/lib/usage";
 import { usageQuery, type UsageFilters } from "@/lib/usageFilters";
 import { Sparkline } from "./charts";
 
@@ -15,15 +15,17 @@ export function ResourceRows({
   rows,
   filters,
 }: {
-  rows: WorkspaceRow[];
+  rows: WorkspaceUsage[];
   filters: UsageFilters;
 }) {
   if (rows.length === 0) {
     return <p className="font-mono text-[11px] text-muted">No requests in this range.</p>;
   }
   const filterHref = (id: string) => `/usage?${usageQuery({ ...filters, resource: id })}`;
+  const listed = rows.reduce((n, ws) => n + ws.documents.length, 0);
 
   return (
+    <>
     <ul className="flex flex-col">
       {rows.map((ws) => (
         <li key={ws.id ?? "detached"} className="border-t border-border py-3 first:border-t-0">
@@ -60,6 +62,12 @@ export function ResourceRows({
         </li>
       ))}
     </ul>
+    {listed >= RESOURCE_ROW_LIMIT ? (
+      <p className="mt-3 font-mono text-[11px] text-muted">
+        The busiest {RESOURCE_ROW_LIMIT} documents are listed; workspace totals count every request.
+      </p>
+    ) : null}
+    </>
   );
 }
 

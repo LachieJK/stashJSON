@@ -162,6 +162,23 @@ function scopeSql(q: Pick<TrafficQuery, "userId" | "cred" | "resource">): Prisma
     }`;
 }
 
+/** `scopeSql` narrowed to the range: `[grid.start, now)`, half-open so `now` itself is out. */
+function rangeSql(q: TrafficQuery, grid: BucketGrid, now: Date): Prisma.Sql {
+  return Prisma.sql`
+    ${scopeSql(q)}
+    AND at >= ${grid.start}::timestamptz
+    AND at < ${now}::timestamptz`;
+}
+
+/**
+ * The bucket an `at` falls in: `date_bin` with the range start as origin, so
+ * an entry at the exact start is in bucket 0 and every query that buckets
+ * lands on the same grid by construction.
+ */
+function bucketSql(grid: BucketGrid): Prisma.Sql {
+  return Prisma.sql`date_bin(make_interval(secs => ${grid.widthMs / 1000}), at, ${grid.start}::timestamptz)`;
+}
+
 type BucketRow = {
   bucket: Date;
   ok: number;
@@ -191,7 +208,7 @@ export async function trafficBuckets(
            sum(server_error)::int AS server_error,
            max(n)::int            AS peak_rpm
     FROM (
-      SELECT date_bin(make_interval(secs => ${grid.widthMs / 1000}), at, ${grid.start}::timestamptz) AS bucket,
+      SELECT ${bucketSql(grid)} AS bucket,
              date_bin('1 minute', at, ${grid.start}::timestamptz) AS minute,
              count(*) FILTER (WHERE status < 400)                                        AS ok,
              count(*) FILTER (WHERE status >= 400 AND status < 500 AND status <> 429)    AS client_error,
@@ -199,9 +216,7 @@ export async function trafficBuckets(
              count(*) FILTER (WHERE status >= 500)                                       AS server_error,
              count(*)                                                                    AS n
       FROM access_logs
-      WHERE ${scopeSql(q)}
-        AND at >= ${grid.start}::timestamptz
-        AND at < ${now}::timestamptz
+      WHERE ${rangeSql(q, grid, now)}
       GROUP BY 1, 2
     ) minutes
     GROUP BY bucket
@@ -252,9 +267,7 @@ export async function summary(
            count(*) FILTER (WHERE status = 429)::int                       AS throttled,
            count(*) FILTER (WHERE at >= ${hourAgo}::timestamptz)::int     AS "lastHour"
     FROM access_logs
-    WHERE ${scopeSql(q)}
-      AND at >= ${grid.start}::timestamptz
-      AND at < ${now}::timestamptz`;
+    WHERE ${rangeSql(q, grid, now)}`;
   return row;
 }
 
@@ -345,6 +358,9 @@ export type HourlyCount = {
  * Requests per UTC hour over the range, non-empty hours only, oldest first —
  * at most 720 rows at 30d. The weekday × hour fold happens on the client
  * (`foldHeatmap`), which is the only place the viewer's zone is known.
+ * `date_bin` from the epoch rather than `date_trunc('hour', …)`: the latter
+ * truncates in the session's zone, which is only a UTC hour when that zone
+ * is a whole-hour one.
  */
 export async function hourlyCounts(
   q: TrafficQuery,
@@ -352,12 +368,10 @@ export async function hourlyCounts(
 ): Promise<HourlyCount[]> {
   const grid = bucketGrid(q.range, now);
   return prisma.$queryRaw<HourlyCount[]>`
-    SELECT date_trunc('hour', at) AS "hourUtc",
-           count(*)::int          AS count
+    SELECT date_bin('1 hour', at, '1970-01-01T00:00:00Z'::timestamptz) AS "hourUtc",
+           count(*)::int                                              AS count
     FROM access_logs
-    WHERE ${scopeSql(q)}
-      AND at >= ${grid.start}::timestamptz
-      AND at < ${now}::timestamptz
+    WHERE ${rangeSql(q, grid, now)}
     GROUP BY 1
     ORDER BY 1`;
 }
@@ -365,7 +379,7 @@ export async function hourlyCounts(
 // ---------------------------------------------------------------------------
 // What: per-resource rows.
 
-export type DocumentRow = {
+export type DocumentUsage = {
   id: string;
   /** false when the document has been deleted — the log keeps the id (ADR-0002). */
   exists: boolean;
@@ -378,7 +392,7 @@ export type DocumentRow = {
   series: number[];
 };
 
-export type WorkspaceRow = {
+export type WorkspaceUsage = {
   /** null for the trailing group of documents outside any workspace. */
   id: string | null;
   /** null when the workspace no longer exists (or `id` is null). */
@@ -388,7 +402,7 @@ export type WorkspaceRow = {
   total: number;
   refused: number;
   probed: boolean;
-  documents: DocumentRow[];
+  documents: DocumentUsage[];
 };
 
 /**
@@ -414,12 +428,9 @@ export async function resourceRows(
   q: TrafficQuery,
   warn: Warnings,
   now: Date = new Date(),
-): Promise<WorkspaceRow[]> {
+): Promise<WorkspaceUsage[]> {
   const grid = bucketGrid(q.range, now);
-  const inRange = Prisma.sql`
-    ${scopeSql(q)}
-    AND at >= ${grid.start}::timestamptz
-    AND at < ${now}::timestamptz`;
+  const inRange = rangeSql(q, grid, now);
 
   const [workspaces, documents] = await Promise.all([
     prisma.$queryRaw<WorkspaceTotals[]>`
@@ -447,9 +458,9 @@ export async function resourceRows(
     documentIds.length === 0
       ? []
       : prisma.$queryRaw<SeriesRow[]>`
-          SELECT document_id AS "documentId",
-                 date_bin(make_interval(secs => ${grid.widthMs / 1000}), at, ${grid.start}::timestamptz) AS bucket,
-                 count(*)::int AS count
+          SELECT document_id     AS "documentId",
+                 ${bucketSql(grid)} AS bucket,
+                 count(*)::int    AS count
           FROM access_logs
           WHERE ${inRange} AND document_id IN (${Prisma.join(documentIds)})
           GROUP BY 1, 2`,
@@ -473,7 +484,7 @@ export async function resourceRows(
   const nameById = new Map(names.map((w) => [w.id, w.name]));
   const probed = new Set(warn.probed.map((p) => p.resourceId));
 
-  const rows = workspaces.map<WorkspaceRow>((w) => ({
+  const rows = workspaces.map<WorkspaceUsage>((w) => ({
     id: w.workspaceId,
     name: w.workspaceId === null ? null : (nameById.get(w.workspaceId) ?? null),
     exists: w.workspaceId !== null && nameById.has(w.workspaceId),

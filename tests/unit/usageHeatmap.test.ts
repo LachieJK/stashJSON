@@ -22,6 +22,8 @@ describe("foldHeatmap", () => {
     const rows = [{ hourUtc: utc("2026-09-16T23:00:00Z"), count: 5 }];
     // 23:00 UTC Wed = 01:00 Thu at UTC+2.
     expect(foldHeatmap(rows, fixedOffset(120))[4][1]).toBe(5);
+    // The fold takes any instant; one at 23:30 UTC lands in the same cell.
+    expect(foldHeatmap([{ hourUtc: utc("2026-09-16T23:30:00Z"), count: 2 }], fixedOffset(120))[4][1]).toBe(2);
     // Untouched under UTC: still Wed 23.
     const under = foldHeatmap(rows, fixedOffset(0));
     expect(under[3][23]).toBe(5);

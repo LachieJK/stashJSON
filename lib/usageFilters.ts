@@ -46,6 +46,15 @@ export function parseUsageFilters(params: SearchParams): UsageFilters {
   };
 }
 
+/**
+ * The deep link to the page scoped to one workspace or document, from the
+ * dashboard: default range and credential, only the resource set. The one
+ * place outside this file that knows the parameter is named `resource`.
+ */
+export function usageHref(resource: string): string {
+  return `/usage?${usageQuery({ range: DEFAULT_RANGE, cred: "all", resource })}`;
+}
+
 /** The query string for a set of filters, with defaults omitted so `/usage` stays clean. */
 export function usageQuery(filters: UsageFilters): string {
   const q = new URLSearchParams();

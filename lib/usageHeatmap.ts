@@ -9,8 +9,8 @@
  * fold is testable with a fixed offset.
  */
 
-/** One non-empty UTC hour, `hourUtc` as epoch ms of the hour's start. */
-export type HourCount = { hourUtc: number; count: number };
+/** A `HourlyCount` as the page hands it to the client: `hourUtc` as epoch ms of the hour's start. */
+export type HeatmapHour = { hourUtc: number; count: number };
 
 /** Where an instant lands in the viewer's week: `weekday` 0 = Sunday, `hour` 0–23. */
 export type Localiser = (ms: number) => { weekday: number; hour: number };
@@ -30,7 +30,7 @@ export const browserLocal: Localiser = (ms) => {
 };
 
 /** `grid[weekday][hour]` = requests, summed across every week in the range. */
-export function foldHeatmap(rows: HourCount[], local: Localiser): number[][] {
+export function foldHeatmap(rows: HeatmapHour[], local: Localiser): number[][] {
   const grid = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
   for (const r of rows) {
     const { weekday, hour } = local(r.hourUtc);
