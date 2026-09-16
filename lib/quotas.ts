@@ -1,7 +1,7 @@
 import type { User } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/http";
-import { PLANS, QUOTA_LABELS, type QuotaResource } from "@/lib/plans";
+import { PLANS, quotaFeature, type QuotaResource } from "@/lib/plans";
 
 /**
  * Quota enforcement — the create-time half of a plan (the other half is the
@@ -49,10 +49,9 @@ export async function assertWithinQuota(
   if (cap === null) return;
   const used = await countOwned(user.id, resource);
   if (used < cap) return;
-  const label = QUOTA_LABELS[resource];
   throw new ApiError(
     403,
-    `Plan quota exceeded: your ${PLANS[user.tier].name} plan allows ${cap.toLocaleString("en-US")} ${cap === 1 ? label.one : label.many}`,
+    `Plan quota exceeded: your ${PLANS[user.tier].name} plan allows ${quotaFeature(resource, cap)}`,
     { type: QUOTA_ERROR_TYPE },
   );
 }

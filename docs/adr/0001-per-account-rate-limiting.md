@@ -204,4 +204,5 @@ record carries the corrected versions; do not "fix" them back.
   one is not.
 - Deferred, deliberately: user-facing usage visibility beyond the headers,
   the per-IP shield, real limit numbers, and billing that would make `tier`
-  change.
+  change. _Update (#60, 2026-09):_ usage visibility is no longer deferred —
+  the dashboard's `/usage` page ships it, starting with plan headroom (#61).

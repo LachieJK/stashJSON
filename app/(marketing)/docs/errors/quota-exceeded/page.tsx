@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PLANS, QUOTA_LABELS, type QuotaResource } from "@/lib/plans";
+import { PLANS, QUOTA_LABELS, QUOTA_RESOURCES, formatCap } from "@/lib/plans";
 
 export const metadata: Metadata = {
   title: "Quota exceeded · StashJSON docs",
 };
-
-const RESOURCES: QuotaResource[] = ["workspaces", "documents", "apiKeys"];
-const TIERS = ["FREE", "PRO", "TEAM"] as const;
 
 // The target of the `type` URI in a quota-refusal 403 body
 // (https://stashjson.com/docs/errors/quota-exceeded). Like the rate-limit
@@ -41,7 +38,7 @@ export default function QuotaExceededPage() {
         <thead>
           <tr className="border-b border-border text-left text-muted">
             <th className="py-2 pr-4 font-medium">Plan</th>
-            {RESOURCES.map((r) => (
+            {QUOTA_RESOURCES.map((r) => (
               <th key={r} className="py-2 pr-4 font-medium capitalize">
                 {QUOTA_LABELS[r].many}
               </th>
@@ -49,17 +46,14 @@ export default function QuotaExceededPage() {
           </tr>
         </thead>
         <tbody>
-          {TIERS.map((tier) => (
+          {Object.entries(PLANS).map(([tier, plan]) => (
             <tr key={tier} className="border-b border-border">
-              <td className="py-2 pr-4">{PLANS[tier].name}</td>
-              {RESOURCES.map((r) => {
-                const cap = PLANS[tier].quotas[r];
-                return (
-                  <td key={r} className="py-2 pr-4 font-mono tabular-nums">
-                    {cap === null ? "Unlimited" : cap.toLocaleString("en-US")}
-                  </td>
-                );
-              })}
+              <td className="py-2 pr-4">{plan.name}</td>
+              {QUOTA_RESOURCES.map((r) => (
+                <td key={r} className="py-2 pr-4 font-mono tabular-nums">
+                  {formatCap(plan.quotas[r])}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>

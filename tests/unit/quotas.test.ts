@@ -9,10 +9,10 @@ import type { Decision } from "@/lib/rateLimit";
  *  - a create below the cap → 201;
  *  - a `null` cap never refuses, however many rows exist;
  *  - counting is by live rows (revoked keys don't count);
- *  - the helper is *soft*: only the create handlers call it.
+ *  - the helper is *soft*: only the create handlers call it, so an over-cap
+ *    account can still read / update / delete what it has.
  *
- * The same rules against a real Postgres (including that an over-cap account
- * can still read / update / delete) are in tests/integration/quotas.test.ts.
+ * The same rules against a real Postgres are in tests/integration/quotas.test.ts.
  */
 
 process.env.DATABASE_URL ??= "postgresql://u:p@localhost:5432/db";
@@ -26,6 +26,11 @@ const countApiKeys = vi.fn<(args: unknown) => Promise<number>>();
 const createWorkspace = vi.fn<(args: unknown) => Promise<unknown>>();
 const createDocument = vi.fn<(args: unknown) => Promise<unknown>>();
 const createApiKey = vi.fn<(args: unknown) => Promise<unknown>>();
+const findUniqueWorkspace = vi.fn<(args: unknown) => Promise<unknown>>();
+const updateWorkspace = vi.fn<(args: unknown) => Promise<unknown>>();
+const deleteWorkspace = vi.fn<(args: unknown) => Promise<unknown>>();
+const findUniqueApiKey = vi.fn<(args: unknown) => Promise<unknown>>();
+const updateApiKey = vi.fn<(args: unknown) => Promise<unknown>>();
 
 vi.mock("@/lib/rateLimit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/rateLimit")>();
@@ -55,7 +60,14 @@ vi.mock("@/lib/db", () => ({
         return u;
       },
     },
-    workspace: { count: countWorkspaces, create: createWorkspace },
+    workspace: {
+      count: countWorkspaces,
+      create: createWorkspace,
+      findUnique: findUniqueWorkspace,
+      update: updateWorkspace,
+      delete: deleteWorkspace,
+    },
+    workspaceTemplate: { findUnique: vi.fn(async () => null) },
     document: {
       count: countDocuments,
       create: createDocument,
@@ -64,8 +76,8 @@ vi.mock("@/lib/db", () => ({
     apiKey: {
       count: countApiKeys,
       create: createApiKey,
-      findUnique: vi.fn(async () => null),
-      update: vi.fn(async () => ({})),
+      findUnique: findUniqueApiKey,
+      update: updateApiKey,
     },
   },
 }));
@@ -83,17 +95,33 @@ const allowed: Decision = {
 const userOn = (tier: User["tier"]) =>
   ({ id: "user-1", email: "u@stashjson.local", name: "U", tier }) as User;
 
-const sessionReq = (path: string, body: unknown) =>
+const sessionReq = (path: string, body: unknown, method = "POST") =>
   new Request(`http://test${path}`, {
-    method: "POST",
+    method,
     headers: {
       "content-type": "application/json",
       cookie: "better-auth.session_token=abc",
     },
-    body: JSON.stringify(body),
+    body: method === "GET" || method === "DELETE" ? null : JSON.stringify(body),
   });
 
 const now = new Date("2026-01-01T00:00:00.000Z");
+const ownedWorkspace = {
+  id: "ws-1",
+  userId: "user-1",
+  name: "old",
+  createdAt: now,
+  updatedAt: now,
+};
+const ownedKey = {
+  id: "key-1",
+  userId: "user-1",
+  name: "ci",
+  keyHash: "h",
+  createdAt: now,
+  lastUsedAt: null,
+  revokedAt: null,
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -121,6 +149,14 @@ beforeEach(() => {
     revokedAt: null,
     ...(args as { data: object }).data,
   }));
+  findUniqueWorkspace.mockResolvedValue(ownedWorkspace);
+  updateWorkspace.mockImplementation(async (args) => ({
+    ...ownedWorkspace,
+    ...(args as { data: object }).data,
+  }));
+  deleteWorkspace.mockResolvedValue(ownedWorkspace);
+  findUniqueApiKey.mockResolvedValue(ownedKey);
+  updateApiKey.mockResolvedValue({ ...ownedKey, revokedAt: now });
 });
 
 describe("assertWithinQuota", () => {
@@ -225,5 +261,61 @@ describe("the create handlers", () => {
     const res = await POST(sessionReq("/api/workspaces", { name: "x" }));
     expect(res.status).toBe(201);
     expect(countWorkspaces).not.toHaveBeenCalled();
+  });
+});
+
+describe("the soft cap: an over-cap account keeps what it has", () => {
+  // FREE allows 1 workspace / 1 key and this account holds exactly that, so
+  // every create above is refused — but nothing else consults the quota, and
+  // the proof is that no count is ever taken.
+  const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
+
+  beforeEach(() => {
+    findUniqueUser.mockResolvedValue(userOn("FREE"));
+    countWorkspaces.mockResolvedValue(1);
+    countApiKeys.mockResolvedValue(1);
+    countDocuments.mockResolvedValue(1_000);
+  });
+
+  it("GET /api/workspaces/:id still reads", async () => {
+    const { GET } = await import("@/app/api/workspaces/[id]/route");
+    const res = await GET(sessionReq("/api/workspaces/ws-1", null, "GET"), ctx("ws-1"));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ id: "ws-1", name: "old" });
+    expect(countWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it("PUT /api/workspaces/:id still renames", async () => {
+    const { PUT } = await import("@/app/api/workspaces/[id]/route");
+    const res = await PUT(
+      sessionReq("/api/workspaces/ws-1", { name: "new" }, "PUT"),
+      ctx("ws-1"),
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ name: "new" });
+    expect(updateWorkspace).toHaveBeenCalledTimes(1);
+    expect(countWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it("DELETE /api/workspaces/:id still deletes", async () => {
+    const { DELETE } = await import("@/app/api/workspaces/[id]/route");
+    const res = await DELETE(
+      sessionReq("/api/workspaces/ws-1", null, "DELETE"),
+      ctx("ws-1"),
+    );
+    expect(res.status).toBe(204);
+    expect(deleteWorkspace).toHaveBeenCalledTimes(1);
+    expect(countWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it("DELETE /api/keys/:id still revokes", async () => {
+    const { DELETE } = await import("@/app/api/keys/[id]/route");
+    const res = await DELETE(sessionReq("/api/keys/key-1", null, "DELETE"), ctx("key-1"));
+    expect(res.status).toBe(204);
+    expect(updateApiKey).toHaveBeenCalledWith({
+      where: { id: "key-1" },
+      data: { revokedAt: expect.any(Date) },
+    });
+    expect(countApiKeys).not.toHaveBeenCalled();
   });
 });

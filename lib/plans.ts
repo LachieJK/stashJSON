@@ -43,6 +43,22 @@ export type QuotaResource = "workspaces" | "documents" | "apiKeys";
 /** A cap per resource; `null` means unlimited. */
 export type Quotas = Record<QuotaResource, number | null>;
 
+/** Every quota-bearing resource, in the order the meters and docs list them. */
+export const QUOTA_RESOURCES: readonly QuotaResource[] = [
+  "workspaces",
+  "documents",
+  "apiKeys",
+];
+
+/**
+ * A cap as text: "1,000", or `unlimited` (default "Unlimited") for `null`.
+ * The one place the null/number split is spelled out, so the pricing bullet,
+ * the 403 detail, the docs table and the Usage meters cannot disagree.
+ */
+export function formatCap(cap: number | null, unlimited = "Unlimited"): string {
+  return cap === null ? unlimited : cap.toLocaleString("en-US");
+}
+
 /** Singular / plural labels for the `/pricing` bullets and the Usage meters. */
 export const QUOTA_LABELS: Record<QuotaResource, { one: string; many: string }> =
   {
@@ -60,8 +76,7 @@ export function quotaFeature(
   cap: number | null,
 ): string {
   const label = QUOTA_LABELS[resource];
-  if (cap === null) return `Unlimited ${label.many}`;
-  return `${cap.toLocaleString("en-US")} ${cap === 1 ? label.one : label.many}`;
+  return `${formatCap(cap)} ${cap === 1 ? label.one : label.many}`;
 }
 
 /**

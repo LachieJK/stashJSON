@@ -3,6 +3,8 @@
 // — and are exported so a test can pin them. An unlimited quota reads `∞` and
 // draws an empty bar: there is nothing to fill towards.
 
+import { formatCap } from "@/lib/plans";
+
 export const WARN_RATIO = 0.8;
 export const DANGER_RATIO = 1;
 
@@ -31,7 +33,7 @@ export function Meter({
       aria-valuenow={used}
       aria-valuemin={0}
       aria-valuemax={cap ?? undefined}
-      aria-valuetext={`${used.toLocaleString("en-US")} of ${cap === null ? "unlimited" : cap.toLocaleString("en-US")}`}
+      aria-valuetext={`${used.toLocaleString("en-US")} of ${formatCap(cap, "unlimited")}`}
     >
       <div className="flex items-baseline justify-between font-mono text-[11px]">
         <span className="text-muted">{label}</span>
@@ -39,7 +41,7 @@ export function Meter({
           {used.toLocaleString("en-US")}
           <span className="text-muted">
             {" / "}
-            {cap === null ? "∞" : cap.toLocaleString("en-US")}
+            {formatCap(cap, "∞")}
           </span>
         </span>
       </div>

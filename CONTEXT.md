@@ -61,7 +61,9 @@ the only storage-specific code, so a different backend is a one-file change.
   creates until it upgrades or deletes. Quotas and the rate-limit policy are
   the two enforced halves of a **plan**; both are defined once, next to the
   tier, so `/pricing` advertises the number the code enforces.
-  _Avoid_: limit (ambiguous with rate limit), cap, allowance
+  In code, **cap** is the number a quota holds (`quotas.workspaces === 1`,
+  `null` = unlimited); "quota" is the rule, "cap" its value.
+  _Avoid_: limit (ambiguous with rate limit), allowance
 - Version-history retention ("7 days of history") is advertised per plan but is
   **not** a quota — it is a time window, not a count — and is not yet enforced.
 

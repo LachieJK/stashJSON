@@ -1,6 +1,6 @@
 import type { User } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
-import { PLANS, type QuotaResource } from "@/lib/plans";
+import { PLANS, QUOTA_RESOURCES, type QuotaResource } from "@/lib/plans";
 import { countOwned } from "@/lib/quotas";
 
 /**
@@ -54,8 +54,6 @@ export type QuotaUsage = {
   /** null = unlimited. */
   cap: number | null;
 };
-
-export const QUOTA_RESOURCES: QuotaResource[] = ["workspaces", "documents", "apiKeys"];
 
 /**
  * `used / cap` for each quota, with `used` counted the same way
