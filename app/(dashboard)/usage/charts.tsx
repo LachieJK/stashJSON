@@ -26,7 +26,7 @@ export type ChartBucket = {
 
 // The four status tokens, per #60: 2xx = ink, 4xx = warn, 429 = info,
 // 5xx = danger. CVD separation was validated there; do not restyle here.
-const CLASS_COLOR: Record<StatusClass, string> = {
+export const CLASS_COLOR: Record<StatusClass, string> = {
   "2xx": "var(--color-text)",
   "4xx": "var(--color-warn)",
   "429": "var(--color-info)",

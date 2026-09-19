@@ -14,3 +14,15 @@ export function pct(a: number, b: number): string {
   const ratio = a / b;
   return `${(100 * ratio).toFixed(ratio < 0.1 && ratio > 0 ? 1 : 0)}%`;
 }
+
+/**
+ * `12s ago`, `3m ago`, `5h ago`, `2d ago` — relative to an explicit `now`,
+ * so the server pass and hydration agree on every label.
+ */
+export function ago(atMs: number, nowMs: number): string {
+  const s = Math.max(0, Math.round((nowMs - atMs) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}

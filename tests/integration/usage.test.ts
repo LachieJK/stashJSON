@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 /**
  * The Usage page's access-log aggregates against a real Postgres: traffic
  * buckets, the hero summary and the two warnings (#62), then the hourly
- * counts behind the heatmap and the per-resource rows (#63). Rows are inserted
+ * counts behind the heatmap and the per-resource rows (#63), and the actors
+ * and paginated entries (#64). Rows are inserted
  * straight into `access_logs` with chosen timestamps, since the rules under
  * test are about *when* and *what* was logged, not how it got there.
  *
@@ -51,8 +52,12 @@ describe.skipIf(!enabled)("usage aggregates (DB-backed)", () => {
     status: number;
     credential?: Credential;
     actorUserId?: string | null;
+    apiKeyId?: string | null;
     documentId?: string | null;
     workspaceId?: string | null;
+    method?: string;
+    path?: string;
+    durationMs?: number;
   };
 
   /** Insert entries owned by `ownerId`. Defaults: an anonymous public read. */
@@ -60,14 +65,15 @@ describe.skipIf(!enabled)("usage aggregates (DB-backed)", () => {
     await prisma.accessLog.createMany({
       data: entries.map((e) => ({
         at: e.at,
-        method: "GET",
+        method: e.method ?? "GET",
         route: "/api/documents/[id]",
-        path: `/api/documents/${e.documentId ?? "doc"}`,
+        path: e.path ?? `/api/documents/${e.documentId ?? "doc"}`,
         status: e.status,
-        durationMs: 5,
+        durationMs: e.durationMs ?? 5,
         credential: e.credential ?? "none",
         actorUserId: e.actorUserId ?? null,
         ownerUserId: ownerId,
+        apiKeyId: e.apiKeyId ?? null,
         documentId: e.documentId ?? null,
         workspaceId: e.workspaceId ?? null,
       })),
@@ -453,6 +459,187 @@ describe.skipIf(!enabled)("usage aggregates (DB-backed)", () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].total).toBe(1);
       expect(rows[0].documents.map((d) => d.id)).toEqual([b.id]);
+    });
+  });
+
+  describe("actors", () => {
+    async function key(userId: string, name: string, revoked = false) {
+      return prisma.apiKey.create({
+        data: {
+          userId,
+          name,
+          keyHash: `hash_${name}_${userId}`,
+          revokedAt: revoked ? hoursAgo(2) : null,
+        },
+      });
+    }
+
+    it("splits the range into you / other accounts / anonymous, with key rows and handle rows", async () => {
+      const owner = await newUser("actors");
+      const stranger = await newUser("actors-stranger");
+      const other = await newUser("actors-other");
+      const prod = await key(owner.id, "prod-api");
+      await log(owner.id, [
+        // You: two via prod-api, one from the dashboard.
+        { at: minutesAgo(30), status: 200, credential: "api_key", actorUserId: owner.id, apiKeyId: prod.id },
+        { at: minutesAgo(20), status: 404, credential: "api_key", actorUserId: owner.id, apiKeyId: prod.id },
+        { at: minutesAgo(10), status: 200, credential: "session", actorUserId: owner.id },
+        // Other accounts: a stranger three times (one refused), another once.
+        { at: minutesAgo(9), status: 200, credential: "api_key", actorUserId: stranger.id, apiKeyId: "not-the-owners-key" },
+        { at: minutesAgo(8), status: 403, credential: "api_key", actorUserId: stranger.id, apiKeyId: "not-the-owners-key" },
+        { at: minutesAgo(7), status: 200, credential: "api_key", actorUserId: stranger.id, apiKeyId: "not-the-owners-key" },
+        { at: minutesAgo(6), status: 200, credential: "session", actorUserId: other.id },
+        // Anonymous, twice.
+        { at: minutesAgo(5), status: 200 },
+        { at: minutesAgo(4), status: 401 },
+        // Out of range.
+        { at: hoursAgo(2), status: 200, credential: "session", actorUserId: owner.id },
+      ]);
+      const { handleFor } = await import("@/lib/handles");
+      const result = await usage.actors(
+        { userId: owner.id, range: "1h", cred: "all", resource: null },
+        NOW,
+      );
+      expect(result.totals).toEqual({ you: 3, others: 4, anonymous: 2 });
+      expect(result.keys).toEqual([
+        { label: "prod-api", revoked: false, total: 2, refused: 1, lastSeen: minutesAgo(20) },
+        { label: "dashboard", revoked: false, total: 1, refused: 0, lastSeen: minutesAgo(10) },
+      ]);
+      expect(result.handles).toEqual([
+        { handle: handleFor(owner.id, stranger.id), total: 3, refused: 1, lastSeen: minutesAgo(7) },
+        { handle: handleFor(owner.id, other.id), total: 1, refused: 0, lastSeen: minutesAgo(6) },
+      ]);
+      // No account id of anyone else leaves lib/: assert on the wire shape.
+      const wire = JSON.stringify(result);
+      expect(wire).not.toContain("actorUserId");
+      expect(wire).not.toContain(stranger.id);
+      expect(wire).not.toContain(other.id);
+    });
+
+    it("still names a revoked key for its historical rows", async () => {
+      const owner = await newUser("actors-revoked");
+      const old = await key(owner.id, "old-ci", true);
+      await log(owner.id, [
+        { at: minutesAgo(5), status: 200, credential: "api_key", actorUserId: owner.id, apiKeyId: old.id },
+      ]);
+      const result = await usage.actors(
+        { userId: owner.id, range: "1h", cred: "all", resource: null },
+        NOW,
+      );
+      expect(result.keys).toEqual([
+        { label: "old-ci", revoked: true, total: 1, refused: 0, lastSeen: minutesAgo(5) },
+      ]);
+    });
+
+    it("applies the page filters", async () => {
+      const owner = await newUser("actors-filtered");
+      const stranger = await newUser("actors-filtered-stranger");
+      await log(owner.id, [
+        { at: minutesAgo(5), status: 200, credential: "session", actorUserId: stranger.id, documentId: "doc-a" },
+        { at: minutesAgo(4), status: 200, documentId: "doc-b" },
+      ]);
+      const result = await usage.actors(
+        { userId: owner.id, range: "1h", cred: "all", resource: "doc-b" },
+        NOW,
+      );
+      expect(result.totals).toEqual({ you: 0, others: 0, anonymous: 1 });
+      expect(result.handles).toEqual([]);
+    });
+  });
+
+  describe("entries", () => {
+    const q = (userId: string) => ({ userId, range: "1h" as const, cred: "all" as const, resource: null });
+
+    it("lists the range newest first, with `who` already rendered", async () => {
+      const owner = await newUser("entries");
+      const stranger = await newUser("entries-stranger");
+      const prod = await prisma.apiKey.create({
+        data: { userId: owner.id, name: "prod-api", keyHash: `hash_entries_${owner.id}`, revokedAt: hoursAgo(1) },
+      });
+      await log(owner.id, [
+        { at: minutesAgo(4), status: 200, method: "PUT", path: "/api/documents/abc", durationMs: 12, credential: "api_key", actorUserId: owner.id, apiKeyId: prod.id },
+        { at: minutesAgo(3), status: 200, credential: "session", actorUserId: owner.id },
+        { at: minutesAgo(2), status: 403, credential: "api_key", actorUserId: stranger.id, apiKeyId: "theirs" },
+        { at: minutesAgo(1), status: 429 },
+        { at: hoursAgo(2), status: 200 }, // out of range
+      ]);
+      const { handleFor } = await import("@/lib/handles");
+      const page = await usage.entries(q(owner.id), null, NOW);
+      expect(page.nextCursor).toBeNull();
+      expect(page.entries.map((e) => e.who)).toEqual([
+        "Anonymous",
+        handleFor(owner.id, stranger.id),
+        "You · dashboard",
+        "You · prod-api",
+      ]);
+      expect(page.entries[3]).toMatchObject({
+        at: minutesAgo(4),
+        method: "PUT",
+        path: "/api/documents/abc",
+        status: 200,
+        durationMs: 12,
+      });
+      expect(JSON.stringify(page)).not.toContain(stranger.id);
+    });
+
+    it("pages by (at, id) without overlap or skips, even when every entry shares an `at`", async () => {
+      const owner = await newUser("entries-paged");
+      const at = minutesAgo(10);
+      await log(
+        owner.id,
+        Array.from({ length: usage.LOG_PAGE_SIZE * 2 + 20 }, () => ({ at, status: 200 })),
+      );
+      const seen = new Set<string>();
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        const page: Awaited<ReturnType<typeof usage.entries>> = await usage.entries(q(owner.id), cursor, NOW);
+        pages += 1;
+        for (const e of page.entries) {
+          expect(seen.has(e.id)).toBe(false);
+          seen.add(e.id);
+        }
+        cursor = page.nextCursor;
+      } while (cursor);
+      expect(pages).toBe(3);
+      expect(seen.size).toBe(usage.LOG_PAGE_SIZE * 2 + 20);
+    });
+
+    it("does not skip entries whose `at` differs from the cursor's only in microseconds", async () => {
+      const owner = await newUser("entries-micros");
+      // Straight SQL: a JS Date cannot carry microseconds, and the cursor must.
+      const n = usage.LOG_PAGE_SIZE + 2;
+      await prisma.$executeRaw`
+        INSERT INTO access_logs (id, at, method, route, path, status, duration_ms, credential, owner_user_id)
+        SELECT gen_random_uuid()::text,
+               '2026-09-16T11:50:00Z'::timestamptz + (i * interval '1 microsecond'),
+               'GET', '/api/documents/[id]', '/api/documents/x', 200, 1, 'none', ${owner.id}
+        FROM generate_series(1, ${n}) AS i`;
+      const first = await usage.entries(q(owner.id), null, NOW);
+      expect(first.entries).toHaveLength(usage.LOG_PAGE_SIZE);
+      expect(first.nextCursor).not.toBeNull();
+      const second = await usage.entries(q(owner.id), first.nextCursor, NOW);
+      expect(second.entries).toHaveLength(2);
+      expect(second.nextCursor).toBeNull();
+      const ids = new Set([...first.entries, ...second.entries].map((e) => e.id));
+      expect(ids.size).toBe(n);
+    });
+
+    it("treats an unreadable cursor as the first page", async () => {
+      const owner = await newUser("entries-badcursor");
+      await log(owner.id, [{ at: minutesAgo(1), status: 200 }]);
+      const page = await usage.entries(q(owner.id), "not-a-cursor", NOW);
+      expect(page.entries).toHaveLength(1);
+    });
+
+    it("applies the page filters", async () => {
+      const owner = await newUser("entries-filtered");
+      await log(owner.id, [
+        { at: minutesAgo(2), status: 200, credential: "session", actorUserId: owner.id },
+        { at: minutesAgo(1), status: 200 },
+      ]);
+      const page = await usage.entries({ ...q(owner.id), cred: "none" }, null, NOW);
+      expect(page.entries.map((e) => e.who)).toEqual(["Anonymous"]);
     });
   });
 });
