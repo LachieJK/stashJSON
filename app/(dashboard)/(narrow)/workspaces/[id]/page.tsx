@@ -10,6 +10,7 @@ import {
   type TemplateDto,
   type WorkspaceDto,
 } from "@/lib/apiClient";
+import { usageHref } from "@/lib/usageFilters";
 
 // A public document is the owner's quota behind an unauthenticated URL: every
 // anonymous read spends the owner's API rate limit. Said at the control, before
@@ -53,9 +54,15 @@ function WorkspaceHeader({ id }: { id: string }) {
   if (!ws) return <p className="text-sm text-muted">Loading workspace…</p>;
 
   return (
-    <div className="card">
-      <h1 className="text-base font-semibold">{ws.name}</h1>
-      <p className="font-mono text-xs text-muted">{ws.id}</p>
+    <div className="card flex items-start justify-between gap-3">
+      <div>
+        <h1 className="text-base font-semibold">{ws.name}</h1>
+        <p className="font-mono text-xs text-muted">{ws.id}</p>
+      </div>
+      {/* The per-workspace usage view is the Usage page filtered to this id (#60). */}
+      <Link href={usageHref(ws.id)} className="link text-sm">
+        Usage →
+      </Link>
     </div>
   );
 }
@@ -280,7 +287,10 @@ function DocumentRow({
           <span className="pill">v{doc.version}</span>
           {doc.is_public && <span className="pill pill-public">public</span>}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={usageHref(doc.id)} className="btn btn-secondary btn-sm">
+            Usage
+          </Link>
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => setOpen(!open)}

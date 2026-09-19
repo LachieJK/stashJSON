@@ -3,8 +3,8 @@
 /*
  * The Usage page's charts: hand-rolled inline SVG, token colours only
  * (decision in #60 — no chart dependency). Marks are thin, stacked segments
- * keep a 2px surface gap, every mark has a hover tooltip, and text never
- * wears a series colour. Lifted from `charts.tsx` on `prototype/usage-page`.
+ * and heatmap cells keep a 2px surface gap, every mark has a hover tooltip,
+ * and text never wears a series colour. Lifted from `charts.tsx` on `prototype/usage-page`.
  *
  * Buckets arrive from the server with epoch-ms starts; labels are formatted
  * in the viewer's zone once mounted (UTC on the server pass, so hydration
@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { STATUS_CLASSES, type StatusClass } from "@/lib/statusClass";
 import type { Range } from "@/lib/usageFilters";
+import { browserLocal, fixedOffset, foldHeatmap, type HeatmapHour } from "@/lib/usageHeatmap";
 
 /** A `TrafficBucket` as the page hands it to a client component. */
 export type ChartBucket = {
@@ -328,4 +329,142 @@ function niceMax(v: number): number {
   const p = Math.pow(10, Math.floor(Math.log10(v)));
   const m = v / p;
   return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+}
+
+// ---------------------------------------------------------------------------
+// When: the weekday × hour heatmap.
+
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const HOUR_LABELS = [0, 6, 12, 18, 23];
+
+/**
+ * Requests by hour of day × weekday, folded here from the server's UTC hours
+ * so the cells are the viewer's local hours. Sequential encoding: one hue
+ * (ink), more is darker via opacity, with an empty cell drawn faintly so the
+ * grid's shape is always visible. The server pass folds in UTC and the
+ * browser re-folds in its own zone once mounted, the same way the axis labels
+ * of the other charts localise.
+ */
+export function Heatmap({ rows, range }: { rows: HeatmapHour[]; range: Range }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const [hover, setHover] = useState<{ weekday: number; hour: number } | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const W = useWidth(ref);
+
+  const grid = foldHeatmap(rows, mounted ? browserLocal : fixedOffset(0));
+  const max = Math.max(1, ...grid.flat());
+  const gap = 2;
+  const padL = 30;
+  const padT = 14;
+  const cell = Math.min(22, Math.max(8, (W - padL) / 24 - gap));
+  const H = padT + 7 * (cell + gap);
+  const cx = (h: number) => padL + h * (cell + gap);
+  const cy = (d: number) => padT + d * (cell + gap);
+
+  return (
+    <div>
+      <div className="relative" ref={ref}>
+        <svg
+          width={W}
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          className="block"
+          role="img"
+          aria-label="Requests by hour of day and weekday"
+        >
+          {HOUR_LABELS.map((h) => (
+            <text key={h} x={cx(h) + cell / 2} y={9} textAnchor="middle" {...AXIS}>
+              {String(h).padStart(2, "0")}
+            </text>
+          ))}
+          {grid.map((row, d) => (
+            <g key={d}>
+              <text x={padL - 6} y={cy(d) + cell / 2 + 3} textAnchor="end" {...AXIS}>
+                {DAYS[d]}
+              </text>
+              {row.map((v, h) => (
+                <rect
+                  key={h}
+                  x={cx(h)}
+                  y={cy(d)}
+                  width={cell}
+                  height={cell}
+                  rx={2}
+                  fill="var(--color-text)"
+                  opacity={v === 0 ? 0.06 : 0.15 + 0.85 * (v / max)}
+                  onMouseEnter={() => setHover({ weekday: d, hour: h })}
+                  onMouseLeave={() => setHover(null)}
+                />
+              ))}
+            </g>
+          ))}
+        </svg>
+        {hover ? (
+          <Tip x={`${((cx(hover.hour) + cell / 2) / W) * 100}%`}>
+            <div className="text-muted">
+              {DAYS[hover.weekday]} {String(hover.hour).padStart(2, "0")}:00
+            </div>
+            <div>{grid[hover.weekday][hover.hour].toLocaleString("en-US")} requests</div>
+          </Tip>
+        ) : null}
+      </div>
+      {range === "1h" || range === "24h" ? (
+        <p className="mt-3 font-mono text-[11px] text-muted">
+          A {range} range fills only a sliver of the week — 7d and 30d fill the grid.
+        </p>
+      ) : range === "30d" ? (
+        <p className="mt-3 font-mono text-[11px] text-muted">
+          30 days is four weeks and two days, so two weekdays are counted five times, the rest four.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// What: the per-document sparkline.
+
+/**
+ * One thin muted line over the range's buckets, no axes. The hover layer is
+ * the browser's own: a `<title>` per bucket, since a row of these with a
+ * positioned tooltip each would be more chrome than chart.
+ */
+export function Sparkline({
+  values,
+  width = 72,
+  height = 18,
+}: {
+  values: number[];
+  width?: number;
+  height?: number;
+}) {
+  const max = Math.max(1, ...values);
+  const x = (i: number) => (i / Math.max(1, values.length - 1)) * (width - 2) + 1;
+  const y = (v: number) => height - 2 - (v / max) * (height - 4);
+  const d = values.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
+  const slot = width / values.length;
+  return (
+    <svg
+      width={width}
+      height={height}
+      className="block shrink-0"
+      role="img"
+      aria-label="Requests per bucket"
+    >
+      {values.map((v, i) => (
+        <rect key={i} x={i * slot} y={0} width={slot} height={height} fill="transparent">
+          <title>{v.toLocaleString("en-US")} requests</title>
+        </rect>
+      ))}
+      <path
+        d={d}
+        fill="none"
+        stroke="var(--color-muted)"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }

@@ -6,16 +6,19 @@ import { prisma } from "@/lib/db";
 import { PLANS, QUOTA_LABELS, ratePerMinute } from "@/lib/plans";
 import {
   BUCKET_LABEL,
+  hourlyCounts,
   loadPlanUsage,
   loadResourceOptions,
+  resourceRows,
   summary,
   trafficBuckets,
   warnings,
 } from "@/lib/usage";
 import { parseUsageFilters } from "@/lib/usageFilters";
-import { RatePressure, TrafficChart } from "./charts";
+import { Heatmap, RatePressure, TrafficChart } from "./charts";
 import { Hero } from "./Hero";
 import { Meter } from "./Meter";
+import { ResourceRows } from "./ResourceRows";
 import { UsageControls } from "./UsageControls";
 import { UsageSection } from "./UsageSection";
 import { Warnings } from "./Warnings";
@@ -28,10 +31,10 @@ export const metadata: Metadata = { title: "Usage · StashJSON" };
  * component: the controls live in the URL and every number is loaded here.
  *
  * Slice 1 (#61) shipped the shell — frame, controls, Plan section. Slice 2
- * (#62) adds the first log-backed pieces: the hero figure and warnings in
- * the header, the Traffic section, and the rate-pressure line in Plan. When,
- * What, Who and Log are the next two slices and slot in as further
- * <UsageSection>s.
+ * (#62) added the first log-backed pieces: the hero figure and warnings in
+ * the header, the Traffic section, and the rate-pressure line in Plan. Slice
+ * 3 (#63) adds When (the heatmap) and What (per-resource rows). Who and Log
+ * are the last slice and slot in as further <UsageSection>s.
  */
 export default async function UsagePage({
   searchParams,
@@ -51,12 +54,17 @@ export default async function UsagePage({
   // agree on where "now" is.
   const now = new Date();
   const query = { userId: user.id, ...filters };
-  const [resources, usage, buckets, figures, warn] = await Promise.all([
+  // The rows carry the probed badge from the warnings, so they chain off
+  // that one promise rather than waiting for the whole batch.
+  const warn = warnings(user.id, now);
+  const [resources, usage, buckets, figures, warnData, hours, rows] = await Promise.all([
     loadResourceOptions(user.id),
     loadPlanUsage(user),
     trafficBuckets(query, now),
     summary(query, now),
-    warnings(user.id, now),
+    warn,
+    hourlyCounts(query, now),
+    warn.then((w) => resourceRows(query, w, now)),
   ]);
   const plan = PLANS[user.tier];
   const price = `$${plan.priceMonthly}/mo`;
@@ -64,6 +72,7 @@ export default async function UsagePage({
   const peak = Math.max(0, ...buckets.map((b) => b.peakRpm));
   // Client components take plain numbers, not Dates.
   const chartBuckets = buckets.map((b) => ({ ...b, start: b.start.getTime() }));
+  const heatRows = hours.map((h) => ({ hourUtc: h.hourUtc.getTime(), count: h.count }));
 
   return (
     <main className="frame-col my-8">
@@ -73,7 +82,7 @@ export default async function UsagePage({
           <UsageControls filters={filters} resources={resources} />
         </div>
         <Hero summary={figures} range={filters.range} />
-        <Warnings warnings={warn} filters={filters} resources={resources} plan={plan} />
+        <Warnings warnings={warnData} filters={filters} resources={resources} plan={plan} />
       </div>
 
       <UsageSection
@@ -112,6 +121,17 @@ export default async function UsagePage({
           </div>
           <RatePressure data={chartBuckets} range={filters.range} ceiling={ceiling} />
         </div>
+      </UsageSection>
+
+      <UsageSection title="When" kicker="requests by hour of day × weekday · your local time">
+        <Heatmap rows={heatRows} range={filters.range} />
+        <p className="mt-3 font-mono text-[11px] text-muted">
+          Quiet hours are when a spike is most likely to be someone else&apos;s traffic.
+        </p>
+      </UsageSection>
+
+      <UsageSection title="What" kicker="each resource over the range · busiest first">
+        <ResourceRows rows={rows} filters={filters} />
       </UsageSection>
 
       {/* Closing rule so the frame's rails end on ticks, not in mid-air. */}
