@@ -146,11 +146,13 @@ export default async function UsagePage({
         <Who actors={who} now={now.getTime()} />
       </UsageSection>
 
-      <UsageSection
-        title="Log"
-        kicker={`${figures.total.toLocaleString("en-US")} entries · newest first · 30-day retention`}
-      >
-        <Log initial={toClientPage(firstPage)} filters={filters} now={now.getTime()} />
+      <UsageSection title="Log" kicker="every request in the range · newest first">
+        <Log
+          initial={toClientPage(firstPage)}
+          total={figures.total}
+          filters={filters}
+          now={now.getTime()}
+        />
       </UsageSection>
 
       {/* Closing rule so the frame's rails end on ticks, not in mid-air. */}

@@ -15,14 +15,18 @@ import type { ClientLogEntry, ClientLogPage } from "./logPage";
  * The first page is server-rendered; "Load more" appends the next through
  * the `loadMoreEntries` action, with the cursor in client state (the URL
  * holds the filters, not the scroll position). "ago" is measured from the
- * page's own clock so the server pass and hydration agree.
+ * page's own clock so the server pass and hydration agree, and that clock
+ * goes with every "Load more" so later pages are cut from the same window.
  */
 export function Log({
   initial,
+  total,
   filters,
   now,
 }: {
   initial: ClientLogPage;
+  /** Entries in the range under these filters — the hero's figure. */
+  total: number;
   filters: UsageFilters;
   now: number;
 }) {
@@ -36,7 +40,7 @@ export function Log({
     setFailed(false);
     startTransition(async () => {
       try {
-        const page = await loadMoreEntries(filters, cursor);
+        const page = await loadMoreEntries(filters, cursor, now);
         setEntries((prev) => [...prev, ...page.entries]);
         setCursor(page.nextCursor);
       } catch {
@@ -56,6 +60,11 @@ export function Log({
         ))}
       </pre>
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-muted">
+        <span>
+          <span className="text-text tabular-nums">{entries.length.toLocaleString("en-US")}</span>{" "}
+          of <span className="text-text tabular-nums">{total.toLocaleString("en-US")}</span>{" "}
+          entries · 30-day retention
+        </span>
         {cursor ? (
           <button
             type="button"

@@ -41,10 +41,14 @@ describe("handleFor", () => {
 
   it("never equals or contains the actor id", async () => {
     const { handleFor } = await import("@/lib/handles");
-    const actor = "0f3a";
-    const handle = handleFor("owner-1", actor, SECRET);
-    expect(handle).not.toBe(actor);
-    expect(handle.includes(actor)).toBe(false);
+    // Real ids are 32-char Better Auth ids or uuids: longer than the handle,
+    // so containment is impossible by length — and the check holds for any
+    // secret, not just this one.
+    for (const actor of ["Kqj13R7m3UnaF6nSa1ymqr9Cmz0GP6eF", "7e6b963f-5061-4178-a2d1-c9c59ed88292"]) {
+      const handle = handleFor("owner-1", actor, SECRET);
+      expect(handle).not.toBe(actor);
+      expect(handle.includes(actor)).toBe(false);
+    }
   });
 
   it("uses BETTER_AUTH_SECRET by default", async () => {

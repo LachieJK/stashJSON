@@ -531,6 +531,22 @@ describe.skipIf(!enabled)("usage aggregates (DB-backed)", () => {
       ]);
     });
 
+    it("never names another account's key, even on a row attributed to the viewer", async () => {
+      const owner = await newUser("actors-foreign-key");
+      const stranger = await newUser("actors-foreign-key-stranger");
+      const theirs = await key(stranger.id, "their-secret-name");
+      await log(owner.id, [
+        // Cannot happen through the auth resolvers; the query must still refuse it.
+        { at: minutesAgo(5), status: 200, credential: "api_key", actorUserId: owner.id, apiKeyId: theirs.id },
+      ]);
+      const result = await usage.actors(
+        { userId: owner.id, range: "1h", cred: "all", resource: null },
+        NOW,
+      );
+      expect(JSON.stringify(result)).not.toContain("their-secret-name");
+      expect(result.keys[0].label).toBe("unknown key");
+    });
+
     it("applies the page filters", async () => {
       const owner = await newUser("actors-filtered");
       const stranger = await newUser("actors-filtered-stranger");

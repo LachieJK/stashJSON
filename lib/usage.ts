@@ -552,12 +552,12 @@ export type Actors = {
 /** Handle rows shown; the totals above them count every account regardless. */
 export const ACTOR_ROW_LIMIT = 100;
 
-/** The row label for the owner's requests that came by session, not key. */
-const DASHBOARD_LABEL = "dashboard";
+type Credential = "api_key" | "session" | "none";
 
 type ActorRow = {
   actorUserId: string | null;
   apiKeyId: string | null;
+  credential: Credential;
   total: number;
   refused: number;
   lastSeen: Date;
@@ -575,23 +575,24 @@ export async function actors(q: TrafficQuery, now: Date = new Date()): Promise<A
   const rows = await prisma.$queryRaw<ActorRow[]>`
     SELECT actor_user_id                              AS "actorUserId",
            api_key_id                                 AS "apiKeyId",
+           credential,
            count(*)::int                              AS total,
            count(*) FILTER (WHERE ${refusedSql})::int AS refused,
            max(at)                                    AS "lastSeen"
     FROM access_logs
     WHERE ${rangeSql(q, grid, now)}
-    GROUP BY 1, 2
+    GROUP BY 1, 2, 3
     ORDER BY total DESC, "lastSeen" DESC`;
 
   const totals: ActorTotals = { you: 0, others: 0, anonymous: 0 };
-  const own: ActorRow[] = [];
+  const ownRows: ActorRow[] = [];
   const byOther = new Map<string, HandleActorRow>();
   for (const r of rows) {
     if (r.actorUserId === null) {
       totals.anonymous += r.total;
     } else if (r.actorUserId === q.userId) {
       totals.you += r.total;
-      own.push(r);
+      ownRows.push(r);
     } else {
       totals.others += r.total;
       // One handle per account: an account may have arrived by several keys.
@@ -607,37 +608,57 @@ export async function actors(q: TrafficQuery, now: Date = new Date()): Promise<A
     }
   }
 
-  const names = await keyNames(own.flatMap((r) => (r.apiKeyId ? [r.apiKeyId] : [])));
-  const keys = own.map<KeyActorRow>((r) => {
-    const key = r.apiKeyId ? names.get(r.apiKeyId) : undefined;
-    return {
-      label: r.apiKeyId === null ? DASHBOARD_LABEL : (key?.name ?? r.apiKeyId),
-      revoked: key?.revokedAt != null,
-      total: r.total,
-      refused: r.refused,
-      lastSeen: r.lastSeen,
-    };
-  });
+  const names = await keyNames(q.userId, ownRows.map((r) => r.apiKeyId));
+  const keys = ownRows.map<KeyActorRow>((r) => ({
+    ...ownLabel(r, names),
+    total: r.total,
+    refused: r.refused,
+    lastSeen: r.lastSeen,
+  }));
   const handles = [...byOther.values()]
     .sort((a, b) => b.total - a.total || b.lastSeen.getTime() - a.lastSeen.getTime())
     .slice(0, ACTOR_ROW_LIMIT);
   return { totals, keys, handles };
 }
 
+type KeyName = { name: string; revokedAt: Date | null };
+
 /**
- * Names for the owner's keys by id, revoked ones included — a key's rows
- * outlive the key, and "old-ci" says more than a uuid. Only the viewer's own
- * key ids are ever passed in; another account's key is never named.
+ * Names for the viewer's keys by id, revoked ones included — a key's rows
+ * outlive the key, and "old-ci" says more than a uuid. Scoped to the viewer
+ * in the query, so another account's key is never named whatever is passed.
  */
-async function keyNames(
-  ids: string[],
-): Promise<Map<string, { name: string; revokedAt: Date | null }>> {
-  if (ids.length === 0) return new Map();
+async function keyNames(userId: string, ids: (string | null)[]): Promise<Map<string, KeyName>> {
+  const wanted = [...new Set(ids.filter((id): id is string => id !== null))];
+  if (wanted.length === 0) return new Map();
   const keys = await prisma.apiKey.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: wanted }, userId },
     select: { id: true, name: true, revokedAt: true },
   });
   return new Map(keys.map((k) => [k.id, { name: k.name, revokedAt: k.revokedAt }]));
+}
+
+/** The row label for the viewer's requests that came by session cookie, not key. */
+const DASHBOARD_LABEL = "dashboard";
+
+/**
+ * How one of the viewer's own requests is labelled — the one rule behind
+ * both the Who rows and the Log's `You · …`: the key's name when a key was
+ * used, "dashboard" for a session request. The two fallbacks are guards,
+ * not cases: a key row is only ever revoked, never deleted, and a request
+ * without a key is a session one.
+ */
+function ownLabel(
+  row: { apiKeyId: string | null; credential: Credential },
+  names: Map<string, KeyName>,
+): { label: string; revoked: boolean } {
+  if (row.apiKeyId !== null) {
+    const key = names.get(row.apiKeyId);
+    return key
+      ? { label: key.name, revoked: key.revokedAt !== null }
+      : { label: "unknown key", revoked: false };
+  }
+  return { label: row.credential === "session" ? DASHBOARD_LABEL : "unknown", revoked: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -706,6 +727,7 @@ type EntryRow = {
   path: string;
   status: number;
   durationMs: number;
+  credential: Credential;
   actorUserId: string | null;
   apiKeyId: string | null;
 };
@@ -733,6 +755,7 @@ export async function entries(
            path,
            status,
            duration_ms   AS "durationMs",
+           credential,
            actor_user_id AS "actorUserId",
            api_key_id    AS "apiKeyId"
     FROM access_logs
@@ -746,16 +769,14 @@ export async function entries(
   const nextCursor =
     rows.length > LOG_PAGE_SIZE && last ? encodeCursor({ at: last.atText, id: last.id }) : null;
 
-  const ownKeyIds = page.flatMap((r) =>
-    r.actorUserId === q.userId && r.apiKeyId ? [r.apiKeyId] : [],
+  const names = await keyNames(
+    q.userId,
+    page.map((r) => (r.actorUserId === q.userId ? r.apiKeyId : null)),
   );
-  const names = await keyNames([...new Set(ownKeyIds)]);
   const who = (r: EntryRow): string => {
     if (r.actorUserId === null) return ANONYMOUS;
     if (r.actorUserId !== q.userId) return handleFor(q.userId, r.actorUserId);
-    const label =
-      r.apiKeyId === null ? DASHBOARD_LABEL : (names.get(r.apiKeyId)?.name ?? r.apiKeyId);
-    return `${YOU} · ${label}`;
+    return `${YOU} · ${ownLabel(r, names).label}`;
   };
   return {
     entries: page.map((r) => ({
