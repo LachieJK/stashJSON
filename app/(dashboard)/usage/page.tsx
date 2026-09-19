@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db";
 import { PLANS, QUOTA_LABELS, ratePerMinute } from "@/lib/plans";
 import {
   BUCKET_LABEL,
+  actors,
+  entries,
   hourlyCounts,
   loadPlanUsage,
   loadResourceOptions,
@@ -17,11 +19,14 @@ import {
 import { parseUsageFilters } from "@/lib/usageFilters";
 import { Heatmap, RatePressure, TrafficChart } from "./charts";
 import { Hero } from "./Hero";
+import { Log } from "./Log";
+import { toClientPage } from "./logPage";
 import { Meter } from "./Meter";
 import { ResourceRows } from "./ResourceRows";
 import { UsageControls } from "./UsageControls";
 import { UsageSection } from "./UsageSection";
 import { Warnings } from "./Warnings";
+import { Who } from "./Who";
 
 export const metadata: Metadata = { title: "Usage · StashJSON" };
 
@@ -33,8 +38,8 @@ export const metadata: Metadata = { title: "Usage · StashJSON" };
  * Slice 1 (#61) shipped the shell — frame, controls, Plan section. Slice 2
  * (#62) added the first log-backed pieces: the hero figure and warnings in
  * the header, the Traffic section, and the rate-pressure line in Plan. Slice
- * 3 (#63) adds When (the heatmap) and What (per-resource rows). Who and Log
- * are the last slice and slot in as further <UsageSection>s.
+ * 3 (#63) added When (the heatmap) and What (per-resource rows); slice 4
+ * (#64) closes the column with Who (actors as handles) and the Log.
  */
 export default async function UsagePage({
   searchParams,
@@ -57,15 +62,18 @@ export default async function UsagePage({
   // The rows carry the probed badge from the warnings, so they chain off
   // that one promise rather than waiting for the whole batch.
   const warn = warnings(user.id, now);
-  const [resources, usage, buckets, figures, warnData, hours, rows] = await Promise.all([
-    loadResourceOptions(user.id),
-    loadPlanUsage(user),
-    trafficBuckets(query, now),
-    summary(query, now),
-    warn,
-    hourlyCounts(query, now),
-    warn.then((w) => resourceRows(query, w, now)),
-  ]);
+  const [resources, usage, buckets, figures, warnData, hours, rows, who, firstPage] =
+    await Promise.all([
+      loadResourceOptions(user.id),
+      loadPlanUsage(user),
+      trafficBuckets(query, now),
+      summary(query, now),
+      warn,
+      hourlyCounts(query, now),
+      warn.then((w) => resourceRows(query, w, now)),
+      actors(query, now),
+      entries(query, null, now),
+    ]);
   const plan = PLANS[user.tier];
   const price = `$${plan.priceMonthly}/mo`;
   const ceiling = ratePerMinute(plan.policy);
@@ -132,6 +140,19 @@ export default async function UsagePage({
 
       <UsageSection title="What" kicker="each resource over the range · busiest first">
         <ResourceRows rows={rows} filters={filters} />
+      </UsageSection>
+
+      <UsageSection title="Who" kicker="handles are per-owner pseudonyms; no account is identified">
+        <Who actors={who} now={now.getTime()} />
+      </UsageSection>
+
+      <UsageSection title="Log" kicker="every request in the range · newest first">
+        <Log
+          initial={toClientPage(firstPage)}
+          total={figures.total}
+          filters={filters}
+          now={now.getTime()}
+        />
       </UsageSection>
 
       {/* Closing rule so the frame's rails end on ticks, not in mid-air. */}

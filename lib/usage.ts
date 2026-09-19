@@ -1,5 +1,6 @@
 import { Prisma, type User } from "@/prisma/generated/client";
 import { prisma } from "@/lib/db";
+import { handleFor } from "@/lib/handles";
 import { PLANS, QUOTA_RESOURCES, type QuotaResource } from "@/lib/plans";
 import { countOwned } from "@/lib/quotas";
 import type { StatusClass } from "@/lib/statusClass";
@@ -10,8 +11,8 @@ import type { Range, UsageFilters } from "@/lib/usageFilters";
  * public usage API — the aggregates live here and are called from the page).
  * The resource picker and plan headroom need no log; the traffic buckets,
  * hero summary and warnings (#62), the hourly counts behind the heatmap and
- * the per-resource rows (#63) are access-log aggregates, with actors still to
- * come. The URL filters (`lib/usageFilters.ts`), the status-class vocabulary
+ * the per-resource rows (#63), and the actors and paginated entries (#64)
+ * are access-log aggregates. The URL filters (`lib/usageFilters.ts`), the status-class vocabulary
  * (`lib/statusClass.ts`) and the heatmap fold (`lib/usageHeatmap.ts`) are
  * kept free of `lib/db` so client components can import them.
  */
@@ -508,4 +509,285 @@ export async function resourceRows(
     if ((a.id === null) !== (b.id === null)) return a.id === null ? 1 : -1;
     return b.total - a.total || (a.id ?? "").localeCompare(b.id ?? "");
   });
+}
+
+// ---------------------------------------------------------------------------
+// Who: actors.
+
+export type ActorTotals = {
+  /** Requests the owner made themselves, by key or from the dashboard. */
+  you: number;
+  /** Requests by other signed-in accounts (shown as handles). */
+  others: number;
+  /** Requests that resolved no identity. */
+  anonymous: number;
+};
+
+export type KeyActorRow = {
+  /** The API key's name, or "dashboard" for session requests. */
+  label: string;
+  /** A revoked key keeps its name for its historical rows. */
+  revoked: boolean;
+  total: number;
+  refused: number;
+  lastSeen: Date;
+};
+
+export type HandleActorRow = {
+  /** A per-owner pseudonym (`acct-7f3a`), never an account id. */
+  handle: string;
+  total: number;
+  refused: number;
+  lastSeen: Date;
+};
+
+export type Actors = {
+  totals: ActorTotals;
+  /** Your own requests, one row per key (busiest first). */
+  keys: KeyActorRow[];
+  /** Other accounts, one row per handle (busiest first), capped at `ACTOR_ROW_LIMIT`. */
+  handles: HandleActorRow[];
+};
+
+/** Handle rows shown; the totals above them count every account regardless. */
+export const ACTOR_ROW_LIMIT = 100;
+
+type Credential = "api_key" | "session" | "none";
+
+type ActorRow = {
+  actorUserId: string | null;
+  apiKeyId: string | null;
+  credential: Credential;
+  total: number;
+  refused: number;
+  lastSeen: Date;
+};
+
+/**
+ * Who touched the owner's resources over the range: the three-way split and
+ * the rows beneath it. One statement groups the log by (actor, key); the
+ * split and the rows are read off it here. Another account's id is mapped
+ * through `handleFor` before it leaves this function — the page props carry
+ * handles only, so a cross-user disclosure cannot happen in rendering.
+ */
+export async function actors(q: TrafficQuery, now: Date = new Date()): Promise<Actors> {
+  const grid = bucketGrid(q.range, now);
+  const rows = await prisma.$queryRaw<ActorRow[]>`
+    SELECT actor_user_id                              AS "actorUserId",
+           api_key_id                                 AS "apiKeyId",
+           credential,
+           count(*)::int                              AS total,
+           count(*) FILTER (WHERE ${refusedSql})::int AS refused,
+           max(at)                                    AS "lastSeen"
+    FROM access_logs
+    WHERE ${rangeSql(q, grid, now)}
+    GROUP BY 1, 2, 3
+    ORDER BY total DESC, "lastSeen" DESC`;
+
+  const totals: ActorTotals = { you: 0, others: 0, anonymous: 0 };
+  const ownRows: ActorRow[] = [];
+  const byOther = new Map<string, HandleActorRow>();
+  for (const r of rows) {
+    if (r.actorUserId === null) {
+      totals.anonymous += r.total;
+    } else if (r.actorUserId === q.userId) {
+      totals.you += r.total;
+      ownRows.push(r);
+    } else {
+      totals.others += r.total;
+      // One handle per account: an account may have arrived by several keys.
+      const handle = handleFor(q.userId, r.actorUserId);
+      const row = byOther.get(handle);
+      if (row) {
+        row.total += r.total;
+        row.refused += r.refused;
+        if (r.lastSeen > row.lastSeen) row.lastSeen = r.lastSeen;
+      } else {
+        byOther.set(handle, { handle, total: r.total, refused: r.refused, lastSeen: r.lastSeen });
+      }
+    }
+  }
+
+  const names = await keyNames(q.userId, ownRows.map((r) => r.apiKeyId));
+  const keys = ownRows.map<KeyActorRow>((r) => ({
+    ...ownLabel(r, names),
+    total: r.total,
+    refused: r.refused,
+    lastSeen: r.lastSeen,
+  }));
+  const handles = [...byOther.values()]
+    .sort((a, b) => b.total - a.total || b.lastSeen.getTime() - a.lastSeen.getTime())
+    .slice(0, ACTOR_ROW_LIMIT);
+  return { totals, keys, handles };
+}
+
+type KeyName = { name: string; revokedAt: Date | null };
+
+/**
+ * Names for the viewer's keys by id, revoked ones included — a key's rows
+ * outlive the key, and "old-ci" says more than a uuid. Scoped to the viewer
+ * in the query, so another account's key is never named whatever is passed.
+ */
+async function keyNames(userId: string, ids: (string | null)[]): Promise<Map<string, KeyName>> {
+  const wanted = [...new Set(ids.filter((id): id is string => id !== null))];
+  if (wanted.length === 0) return new Map();
+  const keys = await prisma.apiKey.findMany({
+    where: { id: { in: wanted }, userId },
+    select: { id: true, name: true, revokedAt: true },
+  });
+  return new Map(keys.map((k) => [k.id, { name: k.name, revokedAt: k.revokedAt }]));
+}
+
+/** The row label for the viewer's requests that came by session cookie, not key. */
+const DASHBOARD_LABEL = "dashboard";
+
+/**
+ * How one of the viewer's own requests is labelled — the one rule behind
+ * both the Who rows and the Log's `You · …`: the key's name when a key was
+ * used, "dashboard" for a session request. The two fallbacks are guards,
+ * not cases: a key row is only ever revoked, never deleted, and a request
+ * without a key is a session one.
+ */
+function ownLabel(
+  row: { apiKeyId: string | null; credential: Credential },
+  names: Map<string, KeyName>,
+): { label: string; revoked: boolean } {
+  if (row.apiKeyId !== null) {
+    const key = names.get(row.apiKeyId);
+    return key
+      ? { label: key.name, revoked: key.revokedAt !== null }
+      : { label: "unknown key", revoked: false };
+  }
+  return { label: row.credential === "session" ? DASHBOARD_LABEL : "unknown", revoked: false };
+}
+
+// ---------------------------------------------------------------------------
+// Log: the raw entries, paginated.
+
+export type LogEntry = {
+  id: string;
+  at: Date;
+  method: string;
+  path: string;
+  status: number;
+  durationMs: number;
+  /** Already rendered: `You · prod-api`, `You · dashboard`, `acct-7f3a`, `Anonymous`. */
+  who: string;
+};
+
+export type LogPage = {
+  entries: LogEntry[];
+  /** Opaque; hand it back to `entries` for the next page. Null on the last page. */
+  nextCursor: string | null;
+};
+
+export const LOG_PAGE_SIZE = 50;
+
+/** The `who` column's fixed words. */
+const YOU = "You";
+const ANONYMOUS = "Anonymous";
+
+type Cursor = {
+  /** ISO-8601 in UTC with microseconds — the column's full precision. */
+  at: string;
+  id: string;
+};
+
+/**
+ * The cursor is the last entry's `(at, id)`, base64url-encoded so it rides in
+ * client state as one string. `at` is carried as text at the column's
+ * microsecond precision rather than as a Date: a JS Date holds milliseconds,
+ * and a truncated cursor would skip every entry whose `at` sits between the
+ * truncation and the true value.
+ */
+export function encodeCursor(cursor: Cursor): string {
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+/** The inverse; null for anything that is not one of ours. */
+export function decodeCursor(raw: string): Cursor | null {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, "base64url").toString());
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const { at, id } = parsed as Record<string, unknown>;
+    if (typeof at !== "string" || typeof id !== "string") return null;
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(at)) return null;
+    return { at, id };
+  } catch {
+    return null;
+  }
+}
+
+type EntryRow = {
+  id: string;
+  at: Date;
+  /** `at` as text, microseconds and all, for the cursor. */
+  atText: string;
+  method: string;
+  path: string;
+  status: number;
+  durationMs: number;
+  credential: Credential;
+  actorUserId: string | null;
+  apiKeyId: string | null;
+};
+
+/**
+ * One page of entries under the page's filters, newest first, keyset-
+ * paginated on `(at, id)` so a page boundary inside a burst of identical
+ * timestamps neither repeats nor drops an entry. The page is fetched one
+ * over size to learn whether a next page exists. `who` is rendered here for
+ * the same reason `actors` maps handles here: no other account's id reaches
+ * the page.
+ */
+export async function entries(
+  q: TrafficQuery,
+  cursor: string | null,
+  now: Date = new Date(),
+): Promise<LogPage> {
+  const grid = bucketGrid(q.range, now);
+  const after = cursor ? decodeCursor(cursor) : null;
+  const rows = await prisma.$queryRaw<EntryRow[]>`
+    SELECT id,
+           at,
+           to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "atText",
+           method,
+           path,
+           status,
+           duration_ms   AS "durationMs",
+           credential,
+           actor_user_id AS "actorUserId",
+           api_key_id    AS "apiKeyId"
+    FROM access_logs
+    WHERE ${rangeSql(q, grid, now)}
+      ${after ? Prisma.sql`AND (at, id) < (${after.at}::timestamptz, ${after.id})` : Prisma.empty}
+    ORDER BY at DESC, id DESC
+    LIMIT ${LOG_PAGE_SIZE + 1}`;
+
+  const page = rows.slice(0, LOG_PAGE_SIZE);
+  const last = page[page.length - 1];
+  const nextCursor =
+    rows.length > LOG_PAGE_SIZE && last ? encodeCursor({ at: last.atText, id: last.id }) : null;
+
+  const names = await keyNames(
+    q.userId,
+    page.map((r) => (r.actorUserId === q.userId ? r.apiKeyId : null)),
+  );
+  const who = (r: EntryRow): string => {
+    if (r.actorUserId === null) return ANONYMOUS;
+    if (r.actorUserId !== q.userId) return handleFor(q.userId, r.actorUserId);
+    return `${YOU} · ${ownLabel(r, names).label}`;
+  };
+  return {
+    entries: page.map((r) => ({
+      id: r.id,
+      at: r.at,
+      method: r.method,
+      path: r.path,
+      status: r.status,
+      durationMs: r.durationMs,
+      who: who(r),
+    })),
+    nextCursor,
+  };
 }
