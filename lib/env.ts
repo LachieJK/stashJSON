@@ -36,7 +36,8 @@ const envSchema = z.object({
   // Transactional email (lib/email.ts): password-reset links. Both are
   // mandatory in production so a deploy without a verified sending domain
   // refuses to boot rather than silently swallowing every reset request. In
-  // dev/test the key stays unset and lib/email.ts prints messages to the log.
+  // dev/test the key may stay unset — lib/email.ts then prints messages to
+  // the log — and the sender falls back via `devDefault` below.
   RESEND_API_KEY: isProd ? z.string().min(1) : z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(1),
 });
