@@ -1,14 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "@/lib/authClient";
 import { AuthHeader, Field } from "../_components";
 import { AuthError } from "../AuthError";
 
-export default function LoginPage() {
+const TITLE = "Log in";
+const SUBTITLE = "Welcome back to StashJSON.";
+
+function LoginForm() {
   const router = useRouter();
+  // /reset-password lands here with ?reset=1 once the new password is set —
+  // every session was revoked, so this is a fresh log-in, not a return.
+  const justReset = useSearchParams().get("reset") === "1";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,13 +37,18 @@ export default function LoginPage() {
 
   return (
     <>
-      <AuthHeader title="Log in" subtitle="Welcome back to StashJSON." />
+      <AuthHeader title={TITLE} subtitle={SUBTITLE} />
 
       <form
         onSubmit={submit}
         aria-busy={busy}
         className="mt-8 flex flex-col gap-4"
       >
+        {justReset ? (
+          <p role="status" className="notice notice-success">
+            Password updated — log in with your new password.
+          </p>
+        ) : null}
         <Field
           id="email"
           label="Email"
@@ -51,6 +63,11 @@ export default function LoginPage() {
           label="Password"
           type="password"
           autoComplete="current-password"
+          aside={
+            <Link href="/forgot-password" className="link">
+              Forgot?
+            </Link>
+          }
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -68,5 +85,15 @@ export default function LoginPage() {
         </Link>
       </p>
     </>
+  );
+}
+
+export default function LoginPage() {
+  // The fallback mirrors the real form's opening block, so the Suspense swap
+  // doesn't jump the column's centred content.
+  return (
+    <Suspense fallback={<AuthHeader title={TITLE} subtitle={SUBTITLE} />}>
+      <LoginForm />
+    </Suspense>
   );
 }

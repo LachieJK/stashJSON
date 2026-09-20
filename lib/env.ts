@@ -33,6 +33,12 @@ const envSchema = z.object({
   // header", and a multi-hop chain then resolves to no IP at all — which
   // collapses every caller onto one shared sign-in bucket (issue #45).
   TRUSTED_PROXIES: z.array(z.string().min(1)),
+  // Transactional email (lib/email.ts): password-reset links. Both are
+  // mandatory in production so a deploy without a verified sending domain
+  // refuses to boot rather than silently swallowing every reset request. In
+  // dev/test the key stays unset and lib/email.ts prints messages to the log.
+  RESEND_API_KEY: isProd ? z.string().min(1) : z.string().min(1).optional(),
+  EMAIL_FROM: z.string().min(1),
 });
 
 export const env = envSchema.parse({
@@ -47,4 +53,9 @@ export const env = envSchema.parse({
     "http://localhost:3000",
   ),
   TRUSTED_PROXIES: parseList(process.env.TRUSTED_PROXIES),
+  RESEND_API_KEY: process.env.RESEND_API_KEY || undefined,
+  EMAIL_FROM: devDefault(
+    process.env.EMAIL_FROM || undefined,
+    "StashJSON <noreply@localhost>",
+  ),
 });

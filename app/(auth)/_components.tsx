@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { CSSProperties, InputHTMLAttributes } from "react";
+import type { CSSProperties, InputHTMLAttributes, ReactNode } from "react";
 import { Brand } from "@/components/Brand";
 
 /*
@@ -78,22 +78,29 @@ export function AuthHeader({
   );
 }
 
-// A labelled input. Height is left to the global .input on purpose.
+// A labelled input. Height is left to the global .input on purpose. `aside`
+// sits right-aligned on the label row — a small action that belongs to this
+// field (the login password's "Forgot?") without widening the form.
 export function Field({
   id,
   label,
   hint,
+  aside,
   ...props
 }: {
   id: string;
   label: string;
   hint?: string;
+  aside?: ReactNode;
 } & InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <label className="label" htmlFor={id}>
-        {label}
-      </label>
+      <div className="flex items-baseline justify-between gap-3">
+        <label className="label" htmlFor={id}>
+          {label}
+        </label>
+        {aside ? <span className="mb-1.5 text-xs">{aside}</span> : null}
+      </div>
       <input
         id={id}
         className="input"

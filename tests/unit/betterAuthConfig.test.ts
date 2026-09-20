@@ -8,10 +8,13 @@ process.env.DATABASE_URL ??= "postgresql://unit:unit@localhost:5432/unit";
 let parseList: typeof import("@/lib/env").parseList;
 let authIpAddress: typeof import("@/lib/betterAuth").authIpAddress;
 let authRateLimit: typeof import("@/lib/betterAuth").authRateLimit;
+let emailAndPassword: typeof import("@/lib/betterAuth").emailAndPassword;
+let resetPasswordEmail: typeof import("@/lib/betterAuth").resetPasswordEmail;
 
 beforeAll(async () => {
   ({ parseList } = await import("@/lib/env"));
-  ({ authIpAddress, authRateLimit } = await import("@/lib/betterAuth"));
+  ({ authIpAddress, authRateLimit, emailAndPassword, resetPasswordEmail } =
+    await import("@/lib/betterAuth"));
 });
 
 // The Better Auth limiter config is pinned here because every one of these
@@ -58,6 +61,34 @@ describe("Better Auth rate-limit configuration", () => {
 
   it("is disabled under Vitest only", () => {
     expect(authRateLimit.enabled).toBe(false);
+  });
+});
+
+describe("Better Auth password reset configuration", () => {
+  it("wires the reset-link sender", () => {
+    // Without this Better Auth answers /request-password-reset with 400
+    // RESET_PASSWORD_DISABLED, and the Forgot? link goes nowhere.
+    expect(typeof emailAndPassword.sendResetPassword).toBe("function");
+  });
+
+  it("ends every web session when the password is reset", () => {
+    expect(emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
+  });
+
+  it("keeps Better Auth's one-hour token expiry", () => {
+    // The email copy and the forgot-password page both say "one hour"; an
+    // override here would silently make them wrong.
+    expect("resetPasswordTokenExpiresIn" in emailAndPassword).toBe(false);
+  });
+
+  it("writes a plain-text message carrying the link, the expiry and the ignore note", () => {
+    const url = "http://localhost:3000/api/auth/reset-password/tok?callbackURL=%2Freset-password";
+    const message = resetPasswordEmail("person@example.com", url);
+    expect(message.to).toBe("person@example.com");
+    expect(message.subject).toBe("Reset your StashJSON password");
+    expect(message.text).toContain(url);
+    expect(message.text).toMatch(/one hour/i);
+    expect(message.text).toMatch(/ignore/i);
   });
 });
 
