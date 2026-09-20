@@ -91,7 +91,7 @@ the only storage-specific code, so a different backend is a one-file change.
   _Avoid_: user id, email, actor name
 - **Credential** — how the actor was identified: an API key, a web session, or
   none. This, not any network detail, is the log's anonymous-versus-signed-in
-  distinction.
+  distinction. A password reset ends every web session the account holds.
 - **Logged** — leaves an entry. Like *metered*, a route is logged by default,
   not by opting in: every `app/api/**/route.ts` except the limiter's two
   exemptions is wrapped, and `tests/unit/routeCoverage.test.ts` fails one that
@@ -110,6 +110,15 @@ The log holds no personal data beyond user ids the system already stores — no
 IP addresses, no user agents, no bodies. That is a decision, not an omission;
 its trade-off is recorded in
 [ADR-0002](docs/adr/0002-access-log-without-personal-data.md).
+
+## Web sign-in
+
+- **Reset link** — a single-use link, valid for one hour, that lets whoever
+  holds it set a new password for the account it was issued to. Requesting one
+  always answers the same way whether or not the address has an account. Using
+  it replaces the password and ends every web session, including the one that
+  requested it.
+  _Avoid_: reset token, recovery link, forgot-password email
 
 ## Deferred work
 
