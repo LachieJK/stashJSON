@@ -43,7 +43,7 @@ const EXEMPT: Record<string, string> = {
     "ours on top would put two conflicting 429 shapes on the same paths. Its " +
     "configuration is tracked in #45. Outside the access log for the same " +
     "reason: it is a vendor router, and sign-in statistics must come from " +
-    "Better Auth's own hooks (see CONTEXT.md, deferred work).",
+    "Better Auth's own hooks.",
 };
 
 /**

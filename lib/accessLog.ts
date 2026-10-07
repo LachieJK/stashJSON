@@ -24,7 +24,7 @@ export const MAX_PATH_LENGTH = 512;
 
 /**
  * How long an entry lives. Flat for every plan — tiered retention is deferred
- * (see `CONTEXT.md`), so this is a constant here and not a plan entitlement.
+ * (ADR-0002), so this is a constant here and not a plan entitlement.
  */
 export const RETENTION_DAYS = 30;
 

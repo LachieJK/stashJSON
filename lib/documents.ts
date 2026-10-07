@@ -136,11 +136,11 @@ export async function updateDocument(
     await assertMatchesWorkspaceTemplate(doc.workspaceId, newData);
 
     return prisma.$transaction(async (tx) => {
-      // CONCURRENCY GAP (see CONTEXT.md → Deferred work): version is read outside
-      // this transaction, so two updates racing on the same document can snapshot
-      // the same version — duplicating/dropping a history entry and jumping version
-      // by two, with no DocumentVersion constraint to catch it. Deferred: the fix
-      // needs a conflict status and a migration, and would live here.
+      // CONCURRENCY GAP: version is read outside this transaction, so two
+      // updates racing on the same document can snapshot the same version —
+      // duplicating/dropping a history entry and jumping version by two, with
+      // no DocumentVersion constraint to catch it. Deferred: the fix needs a
+      // conflict status and a migration, and would live here.
       await tx.documentVersion.create({
         data: {
           documentId: doc.id,

@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { env } from "@/lib/env";
 
 /**
- * A Handle (see CONTEXT.md): how an owner sees an actor who is not them. A
+ * A Handle (see GLOSSARY.md): how an owner sees an actor who is not them. A
  * short pseudonym derived *per owner*, so two owners cannot line up their
  * pages and learn that the same account touched both — the linkage
  * ADR-0002 chose not to store must not be reconstructible from the display.

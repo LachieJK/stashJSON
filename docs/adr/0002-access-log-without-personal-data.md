@@ -9,7 +9,7 @@ bounded `pruneAccessLog` past `RETENTION_DAYS`), with facts recorded in
 and `loadOwnedDocument` (`lib/documents.ts`), `loadOwnedWorkspace`
 (`lib/workspaces.ts`) and the create/list handlers. Every non-exempt
 `app/api/**/route.ts` is wrapped, enforced by `tests/unit/routeCoverage.test.ts`.
-**Glossary:** *Access log*, *Actor*, *Owner*, *Credential* in [`CONTEXT.md`](../../CONTEXT.md)
+**Glossary:** *Access log*, *Actor*, *Owner*, *Credential* in [`GLOSSARY.md`](../../GLOSSARY.md)
 
 ## Context
 
@@ -79,9 +79,9 @@ nothing before that date can be reconstructed — which is why this is recorded.
 - **Await the insert before responding.** A second DB round trip of latency on
   every request, paid by the caller, to guarantee a row that stats can afford
   to lose.
-- **Tiered retention (7 days FREE / 30 PRO+).** Deferred, not rejected — see
-  `CONTEXT.md`. The unresolved question is whose tier governs an entry that
-  has an actor and an owner on different plans.
+- **Tiered retention (7 days FREE / 30 PRO+).** Deferred, not rejected.
+  The unresolved question is whose tier governs an entry that has an actor
+  and an owner on different plans.
 - **`pg_cron` for pruning.** Deferred — it only runs while the Neon compute is
   awake, and enabling it is an out-of-band endpoint change and restart rather
   than a migration. The swap is intended once the compute stops scaling to
