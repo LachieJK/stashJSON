@@ -4,7 +4,7 @@ import { normalizeDatabaseUrl } from "@/lib/databaseUrl";
 // Validate environment variables once, at startup.
 const isProd = process.env.NODE_ENV === "production";
 
-// Auth secrets are mandatory in production but get insecure fallbacks in
+// Auth secrets and mail settings are mandatory in production but get fallbacks in
 // dev/test so `npm run dev`, vitest, and CI don't require a .env just to boot.
 const devDefault = <T extends string>(value: T | undefined, fallback: T): T =>
   isProd ? (value as T) : (value ?? fallback);
@@ -33,6 +33,12 @@ const envSchema = z.object({
   // header", and a multi-hop chain then resolves to no IP at all — which
   // collapses every caller onto one shared sign-in bucket (issue #45).
   TRUSTED_PROXIES: z.array(z.string().min(1)),
+  // Resend API key for outbound mail (password reset links). Unset outside
+  // production means "print mail to the server log" — see lib/email.ts.
+  RESEND_API_KEY: isProd ? z.string().min(1) : z.string().min(1).optional(),
+  // Sender address, e.g. `StashJSON <noreply@stashjson.com>`; its domain must be
+  // verified in Resend.
+  EMAIL_FROM: z.string().min(1),
 });
 
 export const env = envSchema.parse({
@@ -47,4 +53,6 @@ export const env = envSchema.parse({
     "http://localhost:3000",
   ),
   TRUSTED_PROXIES: parseList(process.env.TRUSTED_PROXIES),
+  RESEND_API_KEY: process.env.RESEND_API_KEY || undefined,
+  EMAIL_FROM: devDefault(process.env.EMAIL_FROM, "StashJSON <noreply@localhost>"),
 });
