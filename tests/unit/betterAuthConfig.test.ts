@@ -72,6 +72,10 @@ describe("Better Auth password reset configuration", () => {
     expect(authEmailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
   });
 
+  it("expires a reset link after one hour", () => {
+    expect(authEmailAndPassword.resetPasswordTokenExpiresIn).toBe(3600);
+  });
+
   it("emails the reset link, its one-hour expiry, and an ignore-me line", async () => {
     const url =
       "http://localhost:3000/api/auth/reset-password/tok123?callbackURL=%2Freset-password";

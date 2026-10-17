@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
+import { resetLinkLifetime, resetLinkLifetimeSeconds } from "@/lib/resetLink";
 
 /**
  * How Better Auth resolves the client IP its rate limiter keys on (`ip|path`).
@@ -58,13 +59,12 @@ export const authRateLimit = {
 /**
  * Email/password sign-in plus the forgot-password flow. Using a reset link
  * revokes every web session, so a stolen session dies with the old password.
- * The one-hour expiry is Better Auth's default, stated because the email's
- * copy promises it.
+ * The expiry comes from lib/resetLink.ts, as does the copy that promises it.
  */
 export const authEmailAndPassword = {
   enabled: true,
   requireEmailVerification: false,
-  resetPasswordTokenExpiresIn: 60 * 60,
+  resetPasswordTokenExpiresIn: resetLinkLifetimeSeconds,
   revokeSessionsOnPasswordReset: true,
   sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
     await sendEmail({
@@ -76,7 +76,7 @@ export const authEmailAndPassword = {
         "Set a new password here:",
         url,
         "",
-        "This link expires in one hour and works once. If you didn't ask for a reset, ignore this email; your password won't change.",
+        `This link expires in ${resetLinkLifetime} and works once. If you didn't ask for a reset, ignore this email; your password won't change.`,
       ].join("\n"),
     });
   },

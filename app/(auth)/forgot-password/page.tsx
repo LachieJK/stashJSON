@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { requestPasswordReset } from "@/lib/authClient";
+import { resetLinkLifetime } from "@/lib/resetLink";
 import { AuthHeader, Field } from "../_components";
 import { AuthError } from "../AuthError";
 
@@ -45,7 +46,7 @@ export default function ForgotPasswordPage() {
         <div className="mt-8 flex flex-col gap-4">
           <p role="status" className="notice notice-success">
             If an account exists for {sentTo}, a reset link is on its way. It
-            expires in one hour.
+            expires in {resetLinkLifetime}.
           </p>
           <Link href="/login" className="link self-start text-sm">
             Back to log in
