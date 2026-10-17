@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "@/lib/authClient";
 import { AuthHeader, Field } from "../_components";
 import { AuthError } from "../AuthError";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  // Set by /reset-password after a successful reset.
+  const justReset = useSearchParams().get("reset") === "1";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +35,12 @@ export default function LoginPage() {
     <>
       <AuthHeader title="Log in" subtitle="Welcome back to StashJSON." />
 
+      {justReset ? (
+        <p role="status" className="notice notice-success mt-8">
+          Password updated — log in with your new password.
+        </p>
+      ) : null}
+
       <form
         onSubmit={submit}
         aria-busy={busy}
@@ -51,6 +60,11 @@ export default function LoginPage() {
           label="Password"
           type="password"
           autoComplete="current-password"
+          aside={
+            <Link href="/forgot-password" className="link">
+              Forgot?
+            </Link>
+          }
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -68,5 +82,19 @@ export default function LoginPage() {
         </Link>
       </p>
     </>
+  );
+}
+
+export default function LoginPage() {
+  // The fallback mirrors the real form's opening block, so the Suspense swap
+  // doesn't jump the column's centred content.
+  return (
+    <Suspense
+      fallback={
+        <AuthHeader title="Log in" subtitle="Welcome back to StashJSON." />
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -1,11 +1,11 @@
 import Link from "next/link";
-import type { CSSProperties, InputHTMLAttributes } from "react";
+import type { CSSProperties, InputHTMLAttributes, ReactNode } from "react";
 import { Brand } from "@/components/Brand";
 
 /*
  * Shared furniture for the full-viewport auth split. Everything here is
  * server-safe (no hooks): the layout renders the panel and the top-bar shell
- * on the server, while the client login/signup pages reuse AuthHeader/Field.
+ * on the server, while the client auth pages reuse AuthHeader/Field.
  * The interactive pieces live in their own "use client" files (AuthTopBar,
  * AuthError).
  */
@@ -78,22 +78,37 @@ export function AuthHeader({
   );
 }
 
-// A labelled input. Height is left to the global .input on purpose.
+/*
+ * A labelled input. Height is left to the global .input on purpose. `aside`
+ * sits right-aligned in the label row (e.g. a "Forgot?" link), outside the
+ * <label> so clicking it doesn't focus the input.
+ */
 export function Field({
   id,
   label,
   hint,
+  aside,
   ...props
 }: {
   id: string;
   label: string;
   hint?: string;
+  aside?: ReactNode;
 } & InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <label className="label" htmlFor={id}>
-        {label}
-      </label>
+      {aside ? (
+        <div className="mb-1.5 flex items-baseline justify-between gap-3">
+          <label className="label mb-0" htmlFor={id}>
+            {label}
+          </label>
+          <span className="text-[13px]">{aside}</span>
+        </div>
+      ) : (
+        <label className="label" htmlFor={id}>
+          {label}
+        </label>
+      )}
       <input
         id={id}
         className="input"
