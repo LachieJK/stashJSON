@@ -2,8 +2,11 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
+import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
+import { resetLinkLifetime, resetLinkLifetimeSeconds } from "@/lib/resetLink";
 
 /**
  * How Better Auth resolves the client IP its rate limiter keys on (`ip|path`).
@@ -53,6 +56,51 @@ export const authRateLimit = {
   },
 };
 
+/**
+ * Email/password sign-in plus the forgot-password flow. Using a reset link
+ * revokes every web session, so a stolen session dies with the old password.
+ * The expiry comes from lib/resetLink.ts, as does the copy that promises it.
+ */
+export const authEmailAndPassword = {
+  enabled: true,
+  requireEmailVerification: false,
+  resetPasswordTokenExpiresIn: resetLinkLifetimeSeconds,
+  revokeSessionsOnPasswordReset: true,
+  sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
+    await sendEmail({
+      to: user.email,
+      subject: "Reset your StashJSON password",
+      text: [
+        `Someone asked to reset the password for the StashJSON account ${user.email}.`,
+        "",
+        "Set a new password here:",
+        url,
+        "",
+        `This link expires in ${resetLinkLifetime} and works once. If you didn't ask for a reset, ignore this email; your password won't change.`,
+      ].join("\n"),
+    });
+  },
+};
+
+/**
+ * Where Better Auth runs work the response needn't wait for — chiefly the reset
+ * email. Awaiting it would make a known address answer a Resend round trip
+ * slower than an unknown one, telling a caller who is registered. `after()`
+ * keeps the task alive past the response on serverless. Outside a Next request
+ * scope (Vitest, scripts) it throws, and the task simply runs on in the
+ * long-lived process. Better Auth attaches its own `.catch` to every task it
+ * hands over, so a failed send is logged, never surfaced.
+ */
+export const authBackgroundTasks = {
+  handler: (task: Promise<unknown>) => {
+    try {
+      after(task);
+    } catch {
+      // No request scope to extend; the promise is already running.
+    }
+  },
+};
+
 // Better Auth owns web login: email/password credentials, sessions, and the
 // session cookie. It persists into the Prisma models User/Session/Account/
 // Verification (see prisma/schema.prisma). Our public REST API keys are a
@@ -61,11 +109,8 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: false,
-  },
-  advanced: { ipAddress: authIpAddress },
+  emailAndPassword: authEmailAndPassword,
+  advanced: { ipAddress: authIpAddress, backgroundTasks: authBackgroundTasks },
   rateLimit: authRateLimit,
   // Lets Better Auth set cookies from Next.js server actions / route handlers.
   plugins: [nextCookies()],

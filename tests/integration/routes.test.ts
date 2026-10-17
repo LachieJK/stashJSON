@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { enableTestDatabase } from "./testDatabase";
 
 /**
  * DB-backed route-handler integration tests.
  *
- * SAFETY: these are OFF by default. They only run when TEST_DATABASE_URL is set
- * to a throwaway Postgres that is NOT a production/Neon host. We never touch the
- * `.env` DATABASE_URL (which points at live Neon data) from here.
+ * SAFETY: these are OFF by default; see ./testDatabase.ts for the gate that
+ * keeps them off the live Neon database.
  *
  * To enable locally:
  *   1. Start a disposable Postgres (e.g. `docker compose up -d`).
@@ -15,32 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  *   3. Run: TEST_DATABASE_URL="$TEST_DATABASE_URL" npm run test
  */
 
-const testDbUrl = process.env.TEST_DATABASE_URL;
-
-// Refuse anything that looks like the production database. `neon.tech` covers
-// every Neon host, including the one in this repo's .env.
-const PROD_MARKERS = ["neon.tech"];
-const looksProd =
-  !!testDbUrl && PROD_MARKERS.some((m) => testDbUrl.includes(m));
-const enabled = !!testDbUrl && !looksProd;
-
-if (!enabled) {
-  const why = looksProd
-    ? "TEST_DATABASE_URL points at a production/Neon host — refusing to run."
-    : "TEST_DATABASE_URL is not set.";
-  // eslint-disable-next-line no-console
-  console.info(
-    `[integration] Skipping DB-backed route tests: ${why} ` +
-      "Set TEST_DATABASE_URL to a throwaway (non-Neon) Postgres to enable them.",
-  );
-}
-
-// Point Prisma at the test DB *before* any lib/route module (which imports
-// lib/db → lib/env) is loaded. Modules are pulled in lazily inside the tests so
-// that, when disabled, nothing ever connects to a database.
-if (enabled) {
-  process.env.DATABASE_URL = testDbUrl;
-}
+const enabled = enableTestDatabase("DB-backed route tests");
 
 const jsonHeaders = (apiKey?: string) => ({
   "content-type": "application/json",
