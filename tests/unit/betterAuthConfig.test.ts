@@ -1,17 +1,23 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 // lib/env validates DATABASE_URL at import. Nothing here runs a query, so a
 // placeholder satisfies it without a database; the modules are imported lazily
 // so the placeholder is in place first.
 process.env.DATABASE_URL ??= "postgresql://unit:unit@localhost:5432/unit";
 
+const { sendEmail } = vi.hoisted(() => ({ sendEmail: vi.fn() }));
+vi.mock("@/lib/email", () => ({ sendEmail }));
+
 let parseList: typeof import("@/lib/env").parseList;
 let authIpAddress: typeof import("@/lib/betterAuth").authIpAddress;
 let authRateLimit: typeof import("@/lib/betterAuth").authRateLimit;
+let authEmailAndPassword: typeof import("@/lib/betterAuth").authEmailAndPassword;
 
 beforeAll(async () => {
   ({ parseList } = await import("@/lib/env"));
-  ({ authIpAddress, authRateLimit } = await import("@/lib/betterAuth"));
+  ({ authIpAddress, authRateLimit, authEmailAndPassword } = await import(
+    "@/lib/betterAuth"
+  ));
 });
 
 // The Better Auth limiter config is pinned here because every one of these
@@ -58,6 +64,29 @@ describe("Better Auth rate-limit configuration", () => {
 
   it("is disabled under Vitest only", () => {
     expect(authRateLimit.enabled).toBe(false);
+  });
+});
+
+describe("Better Auth password reset configuration", () => {
+  it("ends every web session when a reset link is used", () => {
+    expect(authEmailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
+  });
+
+  it("emails the reset link, its one-hour expiry, and an ignore-me line", async () => {
+    const url =
+      "http://localhost:3000/api/auth/reset-password/tok123?callbackURL=%2Freset-password";
+    await authEmailAndPassword.sendResetPassword({
+      user: { email: "ada@example.com" },
+      url,
+    });
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const email = sendEmail.mock.calls[0][0];
+    expect(email.to).toBe("ada@example.com");
+    expect(email.subject).toBe("Reset your StashJSON password");
+    expect(email.text).toContain(url);
+    expect(email.text).toMatch(/one hour/);
+    expect(email.text).toMatch(/ignore/i);
   });
 });
 

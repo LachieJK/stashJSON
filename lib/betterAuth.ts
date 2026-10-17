@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
+import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
 
 /**
@@ -53,6 +54,33 @@ export const authRateLimit = {
   },
 };
 
+/**
+ * Email/password sign-in plus the forgot-password flow. Using a reset link
+ * revokes every web session, so a stolen session dies with the old password.
+ * The one-hour expiry is Better Auth's default, stated because the email's
+ * copy promises it.
+ */
+export const authEmailAndPassword = {
+  enabled: true,
+  requireEmailVerification: false,
+  resetPasswordTokenExpiresIn: 60 * 60,
+  revokeSessionsOnPasswordReset: true,
+  sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
+    await sendEmail({
+      to: user.email,
+      subject: "Reset your StashJSON password",
+      text: [
+        `Someone asked to reset the password for the StashJSON account ${user.email}.`,
+        "",
+        "Set a new password here:",
+        url,
+        "",
+        "This link expires in one hour and works once. If you didn't ask for a reset, ignore this email; your password won't change.",
+      ].join("\n"),
+    });
+  },
+};
+
 // Better Auth owns web login: email/password credentials, sessions, and the
 // session cookie. It persists into the Prisma models User/Session/Account/
 // Verification (see prisma/schema.prisma). Our public REST API keys are a
@@ -61,10 +89,7 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: false,
-  },
+  emailAndPassword: authEmailAndPassword,
   advanced: { ipAddress: authIpAddress },
   rateLimit: authRateLimit,
   // Lets Better Auth set cookies from Next.js server actions / route handlers.
