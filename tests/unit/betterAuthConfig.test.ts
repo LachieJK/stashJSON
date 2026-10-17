@@ -12,12 +12,12 @@ let parseList: typeof import("@/lib/env").parseList;
 let authIpAddress: typeof import("@/lib/betterAuth").authIpAddress;
 let authRateLimit: typeof import("@/lib/betterAuth").authRateLimit;
 let authEmailAndPassword: typeof import("@/lib/betterAuth").authEmailAndPassword;
+let authBackgroundTasks: typeof import("@/lib/betterAuth").authBackgroundTasks;
 
 beforeAll(async () => {
   ({ parseList } = await import("@/lib/env"));
-  ({ authIpAddress, authRateLimit, authEmailAndPassword } = await import(
-    "@/lib/betterAuth"
-  ));
+  ({ authIpAddress, authRateLimit, authEmailAndPassword, authBackgroundTasks } =
+    await import("@/lib/betterAuth"));
 });
 
 // The Better Auth limiter config is pinned here because every one of these
@@ -87,6 +87,17 @@ describe("Better Auth password reset configuration", () => {
     expect(email.text).toContain(url);
     expect(email.text).toMatch(/one hour/);
     expect(email.text).toMatch(/ignore/i);
+  });
+
+  it("lets a background task run on outside a Next request scope", async () => {
+    let ran = false;
+    const task = Promise.resolve().then(() => {
+      ran = true;
+    });
+
+    expect(() => authBackgroundTasks.handler(task)).not.toThrow();
+    await task;
+    expect(ran).toBe(true);
   });
 });
 

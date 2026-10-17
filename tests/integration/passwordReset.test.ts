@@ -8,7 +8,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
  * throwaway Postgres named by TEST_DATABASE_URL, never the live Neon host.
  *
  * lib/email is swapped for a capturing sender, so the link is read out of the
- * email exactly as a user would receive it.
+ * email exactly as a user would receive it. The send runs after the response,
+ * through Next's `after()`; that is swapped for a recorder, so a test can hold
+ * the send, observe the response, then flush it.
  */
 
 const testDbUrl = process.env.TEST_DATABASE_URL;
@@ -28,14 +30,27 @@ if (enabled) {
   process.env.DATABASE_URL = testDbUrl;
 }
 
-const { sent } = vi.hoisted(() => ({
+const { sent, mailbox, background } = vi.hoisted(() => ({
   sent: [] as { to: string; subject: string; text: string }[],
+  // While `hold` is pending, every send waits on it.
+  mailbox: { hold: Promise.resolve() },
+  background: [] as Promise<unknown>[],
 }));
 vi.mock("@/lib/email", () => ({
   sendEmail: async (email: { to: string; subject: string; text: string }) => {
+    await mailbox.hold;
     sent.push(email);
   },
 }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (task: Promise<unknown>) => {
+    background.push(task);
+  },
+}));
+
+// Run every task handed to after() so far to completion.
+const flushBackground = () => Promise.all(background.splice(0));
 
 const OLD_PASSWORD = "old-sup3r-secret";
 const NEW_PASSWORD = "new-sup3r-secret";
@@ -109,6 +124,7 @@ describe.skipIf(!enabled)("password reset via a reset link (DB-backed)", () => {
       redirectTo: "/reset-password",
     });
     expect(requested.status).toBe(200);
+    await flushBackground();
 
     const mail = sent.find((m) => m.to === email);
     expect(mail?.subject).toBe("Reset your StashJSON password");
@@ -151,6 +167,7 @@ describe.skipIf(!enabled)("password reset via a reset link (DB-backed)", () => {
       email,
       redirectTo: "/reset-password",
     });
+    await flushBackground();
 
     const before = sent.length;
     const unknown = await post("/request-password-reset", {
@@ -158,8 +175,38 @@ describe.skipIf(!enabled)("password reset via a reset link (DB-backed)", () => {
       redirectTo: "/reset-password",
     });
 
+    await flushBackground();
+
     expect(unknown.status).toBe(known.status);
     expect(await unknown.json()).toEqual(await known.json());
     expect(sent.length).toBe(before);
+  });
+
+  // A known address must not pay the mail round trip an unknown one skips,
+  // or response time tells a caller who is registered.
+  it("answers a known address without waiting for its email to send", async () => {
+    const { email } = await signUp();
+    let release!: () => void;
+    mailbox.hold = new Promise<void>((resolve) => (release = resolve));
+
+    const request = post("/request-password-reset", {
+      email,
+      redirectTo: "/reset-password",
+    });
+    try {
+      const first = await Promise.race([
+        request.then(() => "answered"),
+        new Promise((resolve) => setTimeout(() => resolve("waited on the send"), 2000)),
+      ]);
+      expect(first).toBe("answered");
+      expect((await request).status).toBe(200);
+      expect(sent.some((m) => m.to === email)).toBe(false);
+    } finally {
+      release();
+      mailbox.hold = Promise.resolve();
+    }
+
+    await flushBackground();
+    expect(sent.some((m) => m.to === email)).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
@@ -81,6 +82,25 @@ export const authEmailAndPassword = {
   },
 };
 
+/**
+ * Where Better Auth runs work the response needn't wait for — chiefly the reset
+ * email. Awaiting it would make a known address answer a Resend round trip
+ * slower than an unknown one, telling a caller who is registered. `after()`
+ * keeps the task alive past the response on serverless. Outside a Next request
+ * scope (Vitest, scripts) it throws, and the task simply runs on in the
+ * long-lived process. Better Auth attaches its own `.catch` to every task it
+ * hands over, so a failed send is logged, never surfaced.
+ */
+export const authBackgroundTasks = {
+  handler: (task: Promise<unknown>) => {
+    try {
+      after(task);
+    } catch {
+      // No request scope to extend; the promise is already running.
+    }
+  },
+};
+
 // Better Auth owns web login: email/password credentials, sessions, and the
 // session cookie. It persists into the Prisma models User/Session/Account/
 // Verification (see prisma/schema.prisma). Our public REST API keys are a
@@ -90,7 +110,7 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   emailAndPassword: authEmailAndPassword,
-  advanced: { ipAddress: authIpAddress },
+  advanced: { ipAddress: authIpAddress, backgroundTasks: authBackgroundTasks },
   rateLimit: authRateLimit,
   // Lets Better Auth set cookies from Next.js server actions / route handlers.
   plugins: [nextCookies()],
