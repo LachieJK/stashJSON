@@ -22,7 +22,7 @@ function ResetPasswordForm() {
   const [busy, setBusy] = useState(false);
   // The link can also expire between landing here and submitting.
   const [expired, setExpired] = useState(
-    params.get("error") === "INVALID_TOKEN" || !token,
+    params.get("error") === "INVALID_TOKEN",
   );
 
   async function submit(e: React.FormEvent) {
@@ -43,12 +43,18 @@ function ResetPasswordForm() {
     router.push("/login?reset=1");
   }
 
-  if (expired) {
+  // No token at all means the link was cut short (e.g. wrapped by a mail
+  // client), not that it expired.
+  if (expired || !token) {
     return (
       <>
         <AuthHeader
           title="Reset your password"
-          subtitle="This link has expired or was already used."
+          subtitle={
+            expired
+              ? "This link has expired or was already used."
+              : "This reset link is incomplete."
+          }
         />
         <p className="mt-8 text-sm">
           <Link href="/forgot-password" className="link">

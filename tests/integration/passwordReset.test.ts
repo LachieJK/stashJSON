@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import type { Email } from "@/lib/email";
+import { enableTestDatabase } from "./testDatabase";
 
 /**
  * DB-backed test of the forgot-password flow through the app's real Better
  * Auth instance: request a reset link, follow it, set a new password.
  *
- * OFF by default, same contract as routes.test.ts: it runs only against a
- * throwaway Postgres named by TEST_DATABASE_URL, never the live Neon host.
+ * OFF by default, behind the same gate as routes.test.ts (./testDatabase.ts):
+ * it runs only against a throwaway Postgres, never the live Neon host.
  *
  * lib/email is swapped for a capturing sender, so the link is read out of the
  * email exactly as a user would receive it. The send runs after the response,
@@ -13,31 +15,16 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
  * the send, observe the response, then flush it.
  */
 
-const testDbUrl = process.env.TEST_DATABASE_URL;
-const PROD_MARKERS = ["neon.tech"];
-const looksProd = !!testDbUrl && PROD_MARKERS.some((m) => testDbUrl.includes(m));
-const enabled = !!testDbUrl && !looksProd;
-
-if (!enabled) {
-  // eslint-disable-next-line no-console
-  console.info(
-    "[integration] Skipping password reset tests: set TEST_DATABASE_URL " +
-      "to a throwaway (non-Neon) Postgres to enable them.",
-  );
-}
-
-if (enabled) {
-  process.env.DATABASE_URL = testDbUrl;
-}
+const enabled = enableTestDatabase("password reset tests");
 
 const { sent, mailbox, background } = vi.hoisted(() => ({
-  sent: [] as { to: string; subject: string; text: string }[],
+  sent: [] as Email[],
   // While `hold` is pending, every send waits on it.
   mailbox: { hold: Promise.resolve() },
   background: [] as Promise<unknown>[],
 }));
 vi.mock("@/lib/email", () => ({
-  sendEmail: async (email: { to: string; subject: string; text: string }) => {
+  sendEmail: async (email: Email) => {
     await mailbox.hold;
     sent.push(email);
   },

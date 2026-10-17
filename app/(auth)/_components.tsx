@@ -97,18 +97,12 @@ export function Field({
 } & InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      {aside ? (
-        <div className="mb-1.5 flex items-baseline justify-between gap-3">
-          <label className="label mb-0" htmlFor={id}>
-            {label}
-          </label>
-          <span className="text-[13px]">{aside}</span>
-        </div>
-      ) : (
-        <label className="label" htmlFor={id}>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3">
+        <label className="label mb-0" htmlFor={id}>
           {label}
         </label>
-      )}
+        {aside ? <span className="text-[13px]">{aside}</span> : null}
+      </div>
       <input
         id={id}
         className="input"
